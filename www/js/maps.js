@@ -323,12 +323,10 @@
             ? ' · now'
             : '';
       timeEl.textContent =
-        t.toLocaleString([], {
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-        }) + tag;
+        t.toLocaleString(
+          [],
+          global.GeauxUnits.timeOpts({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+        ) + tag;
     } else if (timeEl) {
       timeEl.textContent = '—';
     }
@@ -446,10 +444,9 @@
     }
     const myId = ++rainOutlookFetchId;
     box.classList.remove('hidden');
-    const units =
-      (typeof localStorage !== 'undefined' && localStorage.getItem('units')) ||
-      'imperial';
-    const precipUnit = units === 'metric' ? 'mm' : 'inch';
+    const U = global.GeauxUnits;
+    const precipUnit = U.get().precip;
+    const mm = U.isMm();
     try {
       const url =
         'https://api.open-meteo.com/v1/forecast?latitude=' +
@@ -477,24 +474,24 @@
         const p = Number(precip[i]) || 0;
         if (p > maxP) maxP = p;
       }
-      if (maxP < 0.01) maxP = units === 'metric' ? 2 : 0.1;
+      if (maxP < 0.01) maxP = mm ? 2 : 0.1;
       let html = '';
       for (let i = 0; i < n; i++) {
         const p = Number(precip[i]) || 0;
         const pr = prob[i] != null ? Number(prob[i]) : null;
         const h = Math.max(4, Math.round((p / maxP) * 36));
         const cls =
-          p >= (units === 'metric' ? 2 : 0.1)
+          p >= (mm ? 2 : 0.1)
             ? 'is-heavy'
             : p > 0 || (pr != null && pr >= 40)
               ? 'is-wet'
               : '';
         const t = new Date(times[i]);
-        const label = t.toLocaleTimeString([], { hour: 'numeric' });
+        const label = t.toLocaleTimeString([], U.timeOpts({ hour: 'numeric' }));
         const tip =
           label +
           ' · ' +
-          (p > 0 ? p.toFixed(units === 'metric' ? 1 : 2) + ' ' + precipUnit : 'dry') +
+          (p > 0 ? p.toFixed(mm ? 1 : 2) + ' ' + U.precipLabel() : 'dry') +
           (pr != null ? ' · ' + Math.round(pr) + '%' : '');
         html +=
           '<div class="rain-hour" title="' +
@@ -670,22 +667,12 @@
 
   // ─── Wind field (Open-Meteo grid + particles) ───────────────────────────
 
-  function mapUnits() {
-    try {
-      var u = localStorage.getItem('gw_web_units') || localStorage.getItem('units');
-      if (u === 'metric' || u === 'imperial') return u;
-    } catch (_) {}
-    return 'imperial';
-  }
-  function windUnits() {
-    return mapUnits();
-  }
-  /** Format a distance stored in miles using the active °C/°F unit preference. */
+  /** Format a distance stored in miles using the distance preference. */
   function formatDistanceMi(mi, opts) {
     opts = opts || {};
     if (mi == null || isNaN(Number(mi))) return '—';
     var n = Number(mi);
-    if (mapUnits() === 'metric') {
+    if (global.GeauxUnits.get().distance === 'km') {
       var km = n * 1.60934;
       var val = km < 10 && !opts.round ? km.toFixed(1) : String(Math.round(km));
       return (opts.approx ? '~' : '') + val + ' km';
@@ -702,11 +689,6 @@
     if (speedMph < 35) return '#e89a3c';
     if (speedMph < 50) return '#e85d4c';
     return '#c44dff';
-  }
-
-  function toMph(speed, units) {
-    if (speed == null || isNaN(speed)) return 0;
-    return units === 'metric' ? Number(speed) * 0.621371 : Number(speed);
   }
 
   /** Meteorological from-direction deg → CSS rotation so arrow points where wind goes */
@@ -769,7 +751,7 @@
   }
 
   function makeWindArrowIcon(speedMph, fromDeg) {
-    const color = windColor(toMph(speedMph, 'imperial'));
+    const color = windColor(Number(speedMph) || 0);
     const rot = windToCssDeg(fromDeg);
     // Arrow points up; CSS rotates to wind-to direction
     const html =
@@ -935,8 +917,6 @@
     if (!m || currentLayer !== 'wind') return;
     const myId = ++windFetchId;
     const legend = $('map-legend');
-    const units = windUnits();
-    const windApiUnit = units === 'metric' ? 'kmh' : 'mph';
     if (legend) legend.textContent = 'Loading wind…';
 
     try {
@@ -949,8 +929,7 @@
         '&longitude=' +
         grid.lons.join(',') +
         '&current=wind_speed_10m,wind_direction_10m' +
-        '&wind_speed_unit=' +
-        windApiUnit;
+        '&wind_speed_unit=mph'; // colors are defined in mph; labels convert
 
       const res = await fetch(url);
       if (!res.ok) throw new Error('Open-Meteo ' + res.status);
@@ -965,15 +944,7 @@
         const lon = row.longitude != null ? row.longitude : grid.lons[i];
         const speed = c.wind_speed_10m != null ? c.wind_speed_10m : 0;
         const dir = c.wind_direction_10m != null ? c.wind_direction_10m : 0;
-        // Particles/colors use mph-equivalent; keep display unit on the sample
-        samples.push({
-          lat: lat,
-          lon: lon,
-          speedMph: toMph(speed, units),
-          speed: speed,
-          units: units,
-          dir: dir,
-        });
+        samples.push({ lat: lat, lon: lon, speedMph: speed, dir: dir });
       }
 
       if (myId !== windFetchId || currentLayer !== 'wind') return;
@@ -1003,28 +974,22 @@
 
       updateWindPinLegend();
       if (legend) {
-        // Same color breakpoints as mph, labels in active units
-        if (units === 'metric') {
-          legend.innerHTML =
-            'Wind · Open-Meteo · ' +
-            '<span class="wind-legend-scale">' +
-            swatch('#7ec8e3', '<8') +
-            swatch('#5b9fd4', '16') +
-            swatch('#3dcc8c', '24') +
-            swatch('#f0c14a', '40') +
-            swatch('#e85d4c', '56+') +
-            ' km/h</span>';
-        } else {
-          legend.innerHTML =
-            'Wind · Open-Meteo · ' +
-            '<span class="wind-legend-scale">' +
-            swatch('#7ec8e3', '<5') +
-            swatch('#5b9fd4', '10') +
-            swatch('#3dcc8c', '15') +
-            swatch('#f0c14a', '25') +
-            swatch('#e85d4c', '35+') +
-            ' mph</span>';
-        }
+        // Same color breakpoints as mph, labels in the chosen unit
+        const W = global.GeauxUnits;
+        const v = function (mph) {
+          return String(Math.round(W.fromMph(mph)));
+        };
+        legend.innerHTML =
+          'Wind · Open-Meteo · ' +
+          '<span class="wind-legend-scale">' +
+          swatch('#7ec8e3', '<' + v(5)) +
+          swatch('#5b9fd4', v(10)) +
+          swatch('#3dcc8c', v(15)) +
+          swatch('#f0c14a', v(25)) +
+          swatch('#e85d4c', v(35) + '+') +
+          ' ' +
+          W.windLabel() +
+          '</span>';
       }
     } catch (err) {
       console.warn('Wind field failed', err);
@@ -1052,11 +1017,9 @@
       return;
     }
     const c = lastForecast.current;
-    const units = localStorage.getItem('units') || 'imperial';
-    const windU = units === 'metric' ? 'km/h' : 'mph';
-    // Forecast already in user units; map wind is always mph — convert for display if metric
+    const windU = global.GeauxUnits.windLabel();
+    // Forecast from weather.js is already in the chosen wind unit
     let speed = c.wind_speed_10m;
-    // pin uses forecast units already from Open-Meteo fetch in weather.js
     const dir = global.PureSkyWeather
       ? global.PureSkyWeather.windDir(c.wind_direction_10m)
       : '';
@@ -1463,12 +1426,10 @@
     if (!iso) return '—';
     try {
       const d = new Date(iso);
-      return d.toLocaleString([], {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
+      return d.toLocaleString(
+        [],
+        global.GeauxUnits.timeOpts({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      );
     } catch (e) {
       return iso;
     }
@@ -1679,7 +1640,7 @@
     }
     const c = lastForecast.current;
     const units = localStorage.getItem('units') || 'imperial';
-    const windU = units === 'metric' ? 'km/h' : 'mph';
+    const windU = global.GeauxUnits.windLabel();
 
     if (kind === 'wind') {
       const dir = global.PureSkyWeather
@@ -2334,12 +2295,10 @@
             ? Math.round(g.flow).toLocaleString() + ' cfs'
             : '—';
         const whenStr = g.when
-          ? new Date(g.when).toLocaleString([], {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })
+          ? new Date(g.when).toLocaleString(
+              [],
+              global.GeauxUnits.timeOpts({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+            )
           : '—';
         const usgs =
           'https://waterdata.usgs.gov/monitoring-location/USGS-' +

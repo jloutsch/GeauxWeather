@@ -74,6 +74,14 @@ public class GeauxWeatherNativePlugin extends Plugin {
         }
     }
 
+    /** The phone's 24-hour switch, so "Automatic" time in the app matches the clock widget. */
+    @PluginMethod
+    public void is24HourFormat(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("value", android.text.format.DateFormat.is24HourFormat(getContext()));
+        call.resolve(ret);
+    }
+
     @PluginMethod
     public void setNextHourNotify(PluginCall call) {
         try {

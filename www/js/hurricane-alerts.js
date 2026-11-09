@@ -25,6 +25,11 @@
  *  - NHC tropical cyclones within ~500 mi
  */
 (function (global) {
+  /** Adds the 12/24-hour preference when units.js is loaded (it is not in the Node tests). */
+  function timeOpts(o) {
+    return global.GeauxUnits ? global.GeauxUnits.timeOpts(o) : o;
+  }
+
   const PREF_KEY = 'geauxweather_hurricane_alerts'; // kept for existing installs
   const SEEN_KEY = 'geauxweather_severe_seen';
   const LEVEL_KEY = 'geauxweather_alert_level';
@@ -644,7 +649,7 @@
         if (d.ends) {
           const t = new Date(d.ends);
           if (!isNaN(t)) {
-            when = 'Until ' + t.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+            when = 'Until ' + t.toLocaleString([], timeOpts({ weekday: 'short', hour: 'numeric', minute: '2-digit' }));
           }
         }
         const sub = [when || d.description, d.place].filter(Boolean).join(' · ');
@@ -729,12 +734,10 @@
       try {
         metaBits.push(
           'Until ' +
-            new Date(detail.ends).toLocaleString([], {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })
+            new Date(detail.ends).toLocaleString(
+              [],
+              timeOpts({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+            )
         );
       } catch (_) {
         metaBits.push('Until ' + detail.ends);

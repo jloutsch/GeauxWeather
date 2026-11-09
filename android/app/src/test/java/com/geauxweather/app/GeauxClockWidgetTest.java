@@ -10,6 +10,14 @@ import org.junit.Test;
 public class GeauxClockWidgetTest {
 
     @Test
+    public void clockFormatFollowsTimeSetting() {
+        assertEquals("H:mm", GeauxClockWidgetProvider.clockFormat("24"));
+        assertEquals("h:mm", GeauxClockWidgetProvider.clockFormat("12"));
+        assertEquals(null, GeauxClockWidgetProvider.clockFormat("auto"));
+        assertEquals(null, GeauxClockWidgetProvider.clockFormat(null));
+    }
+
+    @Test
     public void clearNightShowsMoon() {
         assertEquals("🌙", GeauxClockWidgetProvider.iconFor(0, "☀️ Clear", false));
         assertEquals("🌙", GeauxClockWidgetProvider.iconFor(1, "🌤 Mainly clear", false));
