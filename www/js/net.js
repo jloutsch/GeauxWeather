@@ -22,7 +22,7 @@
  */
 (function (global) {
   const ALLOWED_HOST_RE =
-    /^(?:[\w-]+\.)*(?:noaa\.gov|weather\.gov|rainviewer\.com|open-meteo\.com)$/i;
+    /^(?:[\w-]+\.)*(?:noaa\.gov|weather\.gov|rainviewer\.com|open-meteo\.com|weather\.gc\.ca|brightsky\.dev)$/i;
 
   function isNative() {
     try {

@@ -254,25 +254,13 @@ public final class HurricaneAlertHelper {
             JSONObject next,
             boolean quiet
     ) throws Exception {
-        String url = String.format(
-                Locale.US,
-                "https://api.weather.gov/alerts/active?status=actual&point=%.4f,%.4f",
-                lat,
-                lon
-        );
-        String body = httpGet(url, "application/geo+json,application/json");
-        if (body == null || body.isEmpty()) return false;
-
-        JSONObject root = new JSONObject(body);
-        JSONArray features = root.optJSONArray("features");
-        if (features == null) return true;
+        JSONArray alerts = fetchPointAlerts(lat, lon);
+        if (alerts == null) return false;
         boolean includeAdvisories = "advisories".equals(
                 context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_LEVEL, "warnings"));
 
-        for (int i = 0; i < features.length(); i++) {
-            JSONObject f = features.optJSONObject(i);
-            if (f == null) continue;
-            JSONObject props = f.optJSONObject("properties");
+        for (int i = 0; i < alerts.length(); i++) {
+            JSONObject props = alerts.optJSONObject(i);
             if (props == null) continue;
             String event = props.optString("event", "");
             if (!shouldNotify(event, props.optString("severity", ""), includeAdvisories)) continue;
@@ -323,7 +311,9 @@ public final class HurricaneAlertHelper {
                 detail.put("lat", lat);
                 detail.put("lon", lon);
                 detail.put("place", placeLabel != null ? placeLabel : "");
-                detail.put("layer", mapLayerForEvent(event));
+                // The Tornado layer shows NWS (U.S.) alerts only; other countries' alerts open the radar
+                String layer = mapLayerForEvent(event);
+                detail.put("layer", props.has("source") && "tornado".equals(layer) ? "radar" : layer);
             } catch (Exception ignored) {
             }
             post(
@@ -335,6 +325,108 @@ public final class HurricaneAlertHelper {
             );
         }
         return true;
+    }
+
+    /**
+     * Alerts for a point as NWS-style properties, or null when the feed failed. NWS covers the U.S.
+     * and answers 400 for a point it doesn't; then the DWD (via Bright Sky) in Germany, else
+     * Environment Canada (empty outside Canada). Same logic as fetchPointAlerts in hurricane-alerts.js.
+     */
+    static JSONArray fetchPointAlerts(double lat, double lon) throws Exception {
+        HttpResult nws = httpGetResult(String.format(Locale.US,
+                "https://api.weather.gov/alerts/active?status=actual&point=%.4f,%.4f", lat, lon),
+                "application/geo+json,application/json");
+        if (nws.ok()) {
+            JSONArray out = new JSONArray();
+            JSONArray features = new JSONObject(nws.body).optJSONArray("features");
+            for (int i = 0; features != null && i < features.length(); i++) {
+                JSONObject f = features.optJSONObject(i);
+                if (f != null && f.optJSONObject("properties") != null) out.put(f.optJSONObject("properties"));
+            }
+            return out;
+        }
+        if (nws.code != 400) return null; // a real failure, not "outside the U.S."
+        if (inGermany(lat, lon)) {
+            HttpResult dwd = httpGetResult(String.format(Locale.US,
+                    "https://api.brightsky.dev/alerts?lat=%.4f&lon=%.4f", lat, lon), "application/json");
+            if (dwd.code == 404) return new JSONArray(); // not covered by the DWD
+            return dwd.ok() ? fromBrightSky(new JSONObject(dwd.body)) : null;
+        }
+        double d = 0.001;
+        HttpResult eccc = httpGetResult(String.format(Locale.US,
+                "https://api.weather.gc.ca/collections/weather-alerts/items?f=json&lang=en&bbox=%.4f,%.4f,%.4f,%.4f",
+                lon - d, lat - d, lon + d, lat + d), "application/json");
+        return eccc.ok() ? fromEccc(new JSONObject(eccc.body)) : null;
+    }
+
+    /** Germany, roughly; Bright Sky answers "not covered" for the bits of neighbours this box includes. */
+    static boolean inGermany(double lat, double lon) {
+        return lat >= 47.2 && lat <= 55.1 && lon >= 5.8 && lon <= 15.1;
+    }
+
+    /** "winter storm warning" → "Winter Storm Warning" (also after hyphens). */
+    static String titleCase(String s) {
+        StringBuilder b = new StringBuilder(s == null ? "" : s);
+        for (int i = 0; i < b.length(); i++) {
+            if (i == 0 || b.charAt(i - 1) == ' ' || b.charAt(i - 1) == '-') b.setCharAt(i, Character.toUpperCase(b.charAt(i)));
+        }
+        return b.toString();
+    }
+
+    /** Environment Canada alert type → NWS severity: warnings/watches notify, advisories with "+ advisories", statements are skipped (like NWS Minor alerts). */
+    static String ecccSeverity(String type) {
+        if ("warning".equals(type) || "watch".equals(type)) return "Severe";
+        return "advisory".equals(type) ? "Moderate" : "Minor";
+    }
+
+    private static JSONArray fromEccc(JSONObject geo) throws Exception {
+        JSONArray out = new JSONArray();
+        JSONArray features = geo.optJSONArray("features");
+        for (int i = 0; features != null && i < features.length(); i++) {
+            JSONObject f = features.optJSONObject(i);
+            JSONObject p = f != null ? f.optJSONObject("properties") : null;
+            if (p == null || p.optString("status_en", "").toLowerCase(Locale.US).matches(".*(ended|cancel).*")) continue;
+            String event = titleCase(p.optString("alert_name_en", "weather alert"));
+            JSONObject a = new JSONObject();
+            // Re-issues get new ids; name + area notifies once per alert per area until it ends
+            a.put("id", "eccc:" + p.optString("alert_name_en") + "|" + p.optString("feature_id", p.optString("feature_name_en")));
+            a.put("event", event);
+            a.put("severity", ecccSeverity(p.optString("alert_type")));
+            a.put("headline", event + " in effect");
+            a.put("areaDesc", p.optString("feature_name_en", ""));
+            a.put("description", p.optString("alert_text_en", ""));
+            a.put("ends", p.optString("event_end_datetime", p.optString("expiration_datetime", "")));
+            a.put("sent", p.optString("publication_datetime", ""));
+            a.put("source", "Environment Canada");
+            out.put(a);
+        }
+        return out;
+    }
+
+    private static JSONArray fromBrightSky(JSONObject json) throws Exception {
+        JSONArray out = new JSONArray();
+        JSONObject loc = json.optJSONObject("location");
+        String place = loc != null ? loc.optString("name", loc.optString("district", "")) : "";
+        String cell = loc != null ? loc.optString("warn_cell_id", "") : "";
+        JSONArray alerts = json.optJSONArray("alerts");
+        for (int i = 0; alerts != null && i < alerts.length(); i++) {
+            JSONObject al = alerts.optJSONObject(i);
+            if (al == null || "test".equals(al.optString("status"))) continue;
+            JSONObject a = new JSONObject();
+            // DWD updates get new ids; event + severity + warning area notifies again only when it escalates
+            a.put("id", "dwd:" + al.optString("event_code") + "|" + al.optString("severity") + "|" + cell);
+            a.put("event", titleCase(al.optString("event_en", "weather warning")));
+            a.put("severity", titleCase(al.optString("severity", "minor")));
+            a.put("headline", al.optString("headline_en", ""));
+            a.put("areaDesc", place);
+            a.put("description", al.optString("description_en", ""));
+            a.put("instruction", al.optString("instruction_en", ""));
+            a.put("ends", al.optString("expires", ""));
+            a.put("sent", al.optString("effective", ""));
+            a.put("source", "DWD");
+            out.put(a);
+        }
+        return out;
     }
 
     private static boolean isSevereEvent(String event) {
@@ -615,7 +707,28 @@ public final class HurricaneAlertHelper {
         if (nm != null) nm.createNotificationChannel(ch);
     }
 
+    static final class HttpResult {
+        final int code;
+        final String body;
+
+        HttpResult(int code, String body) {
+            this.code = code;
+            this.body = body;
+        }
+
+        boolean ok() {
+            return code >= 200 && code < 300 && body != null;
+        }
+    }
+
+    /** Body for a 2xx answer, else null. */
     static String httpGet(String urlStr, String accept) throws Exception {
+        HttpResult r = httpGetResult(urlStr, accept);
+        return r.ok() ? r.body : null;
+    }
+
+    /** Status code plus body (2xx only); callers that need to tell "not covered" from a failure use this. */
+    static HttpResult httpGetResult(String urlStr, String accept) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
         conn.setConnectTimeout(20000);
         conn.setReadTimeout(30000);
@@ -626,7 +739,7 @@ public final class HurricaneAlertHelper {
         conn.setRequestProperty("Accept", accept != null ? accept : "*/*");
         try {
             int code = conn.getResponseCode();
-            if (code < 200 || code >= 300) return null;
+            if (code < 200 || code >= 300) return new HttpResult(code, null);
             BufferedReader br = new BufferedReader(
                     new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8)
             );
@@ -634,7 +747,7 @@ public final class HurricaneAlertHelper {
             String line;
             while ((line = br.readLine()) != null) sb.append(line);
             br.close();
-            return sb.toString();
+            return new HttpResult(code, sb.toString());
         } finally {
             conn.disconnect();
         }
