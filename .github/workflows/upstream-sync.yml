@@ -2,6 +2,8 @@
 #  - clean merge  → push sync/upstream-<tag>, open a PR into main, start CI on it.
 #                   CI failing on that PR means upstream broke one of this fork's features.
 #  - conflicts    → open an issue listing the conflicting files (resolve by hand).
+#  - push refused → open an issue (the Actions token can't push upstream changes to .github/workflows).
+# A manual run can merge another ref (upstream main between releases) or another repository (testing).
 # Needs: Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests".
 name: Upstream sync
 
@@ -9,6 +11,15 @@ on:
   schedule:
     - cron: "0 13 * * *" # daily, 13:00 UTC
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Upstream tag or branch to merge (empty: the latest release)"
+        required: false
+        default: ""
+      upstream:
+        description: "Repository to merge from (owner/name)"
+        required: false
+        default: tunefriend/GeauxWeather
 
 permissions:
   contents: write # push the sync branch
@@ -19,15 +30,15 @@ permissions:
 concurrency:
   group: upstream-sync
 
-env:
-  UPSTREAM: tunefriend/GeauxWeather
-
 jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
+      # Through env, not ${{ }} in the script, so input text can't become shell code
+      UPSTREAM: ${{ inputs.upstream || 'tunefriend/GeauxWeather' }}
+      REF: ${{ inputs.ref }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -37,36 +48,59 @@ jobs:
       - name: Merge the latest upstream release
         run: |
           set -euo pipefail
-          tag=$(gh release view -R "$UPSTREAM" --json tagName -q .tagName)
+          [[ "$UPSTREAM" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "bad repository: $UPSTREAM"; exit 1; }
+          if [ -n "$REF" ]; then
+            name=$REF
+            link="https://github.com/$UPSTREAM/tree/$name"
+          else
+            name=$(gh release view -R "$UPSTREAM" --json tagName -q .tagName)
+            link="https://github.com/$UPSTREAM/releases/tag/$name"
+          fi
+          if [[ "$name" == -* ]] || ! git check-ref-format --allow-onelevel "$name"; then
+            echo "bad ref: $name"
+            exit 1
+          fi
           git remote add upstream "https://github.com/$UPSTREAM.git"
-          git fetch --no-tags upstream "refs/tags/$tag:refs/tags/upstream-$tag"
+          git fetch --no-tags upstream "$name" # a tag or a branch
+          target=$(git rev-parse 'FETCH_HEAD^{commit}')
 
-          if git merge-base --is-ancestor "upstream-$tag" HEAD; then
-            echo "main already contains upstream $tag; nothing to do."
+          if git merge-base --is-ancestor "$target" HEAD; then
+            echo "main already contains $UPSTREAM $name; nothing to do."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          branch="sync/upstream-$tag"
+          branch="sync/upstream-${name//\//-}"
           git switch -c "$branch"
 
-          if git merge --no-edit -m "Merge upstream $tag" "upstream-$tag"; then
-            git push --force origin "$branch"
+          # Opens an issue with this title and body unless an open one with the title exists
+          report() {
+            if [ -z "$(gh issue list --state open --search "\"$1\" in:title" --json number -q '.[].number')" ]; then
+              gh issue create --title "$1" --body "$2"
+            fi
+          }
+          # Backticks in the issue bodies below are literal Markdown.
+          # shellcheck disable=SC2016
+          fix_locally="$(printf '```\ngit fetch https://github.com/%s.git %s\ngit switch -c %s main\ngit merge FETCH_HEAD\n# fix conflicts, run npm test and ./gradlew testDebugUnitTest, then open a PR\n```' "$UPSTREAM" "$name" "$branch")"
+
+          if git merge --no-edit -m "Merge upstream $name" "$target"; then
+            if ! git push --force origin "$branch" 2> push.err; then
+              cat push.err
+              # shellcheck disable=SC2016
+              report "Upstream $name needs a manual merge" "$(printf '[%s](%s) merges cleanly, but the sync job could not push it:\n\n```\n%s\n```\n\nThe Actions token cannot push changes to `.github/workflows/`; merge it locally and push with your own credentials:\n%s' "$name" "$link" "$(cat push.err)" "$fix_locally")"
+              exit 0
+            fi
             if ! gh pr view "$branch" --json number >/dev/null 2>&1; then
               gh pr create --base main --head "$branch" \
-                --title "Sync upstream $tag" \
-                --body "Merges upstream release [$tag](https://github.com/$UPSTREAM/releases/tag/$tag) into this fork. CI runs on this branch; a failure means upstream changed something one of this fork's features or tests depend on."
+                --title "Sync upstream $name" \
+                --body "Merges upstream [$name]($link) into this fork. CI runs on this branch; a failure means upstream changed something one of this fork's features or tests depend on."
             fi
             gh workflow run ci.yml --ref "$branch"
           else
-            # Backticks here and in the issue body are literal Markdown.
             # shellcheck disable=SC2016
             conflicts=$(git diff --name-only --diff-filter=U | sed 's/^/- `/; s/$/`/')
             git merge --abort
-            title="Upstream $tag merge conflict"
-            if [ -z "$(gh issue list --state open --search "\"$title\" in:title" --json number -q '.[].number')" ]; then
-              # shellcheck disable=SC2016
-              gh issue create --title "$title" --body "$(printf 'Upstream release [%s](https://github.com/%s/releases/tag/%s) does not merge cleanly into `main`.\n\nConflicting files:\n%s\n\nResolve locally:\n```\ngit fetch https://github.com/%s.git refs/tags/%s\ngit switch -c sync/upstream-%s main\ngit merge FETCH_HEAD\n# fix conflicts, run npm test and ./gradlew testDebugUnitTest, then open a PR\n```' "$tag" "$UPSTREAM" "$tag" "$conflicts" "$UPSTREAM" "$tag" "$tag")"
-            fi
+            # shellcheck disable=SC2016
+            report "Upstream $name merge conflict" "$(printf '[%s](%s) does not merge cleanly into `main`.\n\nConflicting files:\n%s\n\nResolve locally:\n%s' "$name" "$link" "$conflicts" "$fix_locally")"
           fi
