@@ -59,6 +59,7 @@ public class WidgetRefreshWorker extends Worker {
     private static final String KEY_INTERVAL = "geauxweather_bg_interval"; // minutes last scheduled
     /** Epoch ms of the last background run, shown in Settings so the user can see the job is alive. */
     private static final String KEY_LAST_RUN = "geauxweather_bg_last_run";
+    private static final String KEY_SINCE = "geauxweather_bg_since"; // when the job was last switched on
     private static final String KEY_MODEL = "geauxweather_model"; // Settings → Forecast model
 
     public WidgetRefreshWorker(@NonNull Context context, @NonNull WorkerParameters params) {
@@ -102,7 +103,8 @@ public class WidgetRefreshWorker extends Worker {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         WorkManager wm = WorkManager.getInstance(context);
         if (!needed(context)) {
-            prefs.edit().remove(KEY_INTERVAL).apply();
+            // Forget the old run too, or switching back on would show "overdue" before the first new run
+            prefs.edit().remove(KEY_INTERVAL).remove(KEY_LAST_RUN).remove(KEY_SINCE).apply();
             return wm.cancelUniqueWork(WORK_NAME);
         }
         int minutes = intervalMinutes(HurricaneAlertHelper.isEnabled(context), HurricaneAlertHelper.isFast(context),
@@ -118,7 +120,10 @@ public class WidgetRefreshWorker extends Worker {
         Operation op = wm.enqueueUniquePeriodicWork(WORK_NAME,
                 changed ? ExistingPeriodicWorkPolicy.UPDATE : ExistingPeriodicWorkPolicy.KEEP, req);
         if (changed) {
-            prefs.edit().putString(KEY_INTERVAL, String.valueOf(minutes)).apply();
+            SharedPreferences.Editor e = prefs.edit().putString(KEY_INTERVAL, String.valueOf(minutes));
+            // Switched on from off: Settings counts "overdue" from here until the first run
+            if (!prefs.contains(KEY_INTERVAL)) e.putString(KEY_SINCE, String.valueOf(System.currentTimeMillis()));
+            e.apply();
             Log.i(TAG, "background job every " + minutes + " min");
         }
         return op;

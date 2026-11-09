@@ -142,10 +142,10 @@
 
   /**
    * Settings → Background updates. The job runs every intervalMin (15/30/60); more than twice that plus
-   * 15 minutes without a run means Android is holding it back (battery optimisation, sleeping apps).
+   * 15 minutes without a run (since sinceMs, when it was switched on, if it never ran) means it is overdue.
    * @returns {{text: string, stale: boolean}}
    */
-  function bgStatus(nowMs, lastRunMs, intervalMin, alertsAtMs) {
+  function bgStatus(nowMs, lastRunMs, intervalMin, alertsAtMs, sinceMs) {
     if (!intervalMin) return { text: 'Off (no widget, next-hour or alert checks)', stale: false };
     const when = (ms) => {
       const d = new Date(ms);
@@ -154,7 +154,8 @@
     };
     const parts = [lastRunMs ? 'last ran ' + when(lastRunMs) : 'not run yet', 'every ' + intervalMin + ' min'];
     if (alertsAtMs) parts.push('alerts checked ' + when(alertsAtMs));
-    const stale = !!lastRunMs && nowMs - lastRunMs > (2 * intervalMin + 15) * 60000;
+    const from = lastRunMs || sinceMs;
+    const stale = !!from && nowMs - from > (2 * intervalMin + 15) * 60000;
     return { text: parts.join(' · '), stale: stale };
   }
 

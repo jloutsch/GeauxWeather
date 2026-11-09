@@ -319,11 +319,14 @@
         Date.now(),
         Number(await get('geauxweather_bg_last_run')) || 0,
         Number(await get('geauxweather_bg_interval')) || 0,
-        Number(await get('geauxweather_alert_last_check')) || 0
+        Number(await get('geauxweather_alert_last_check')) || 0,
+        Number(await get('geauxweather_bg_since')) || 0
       );
-      el.textContent = s.stale
-        ? s.text + ' — Android seems to be pausing it; set GeauxWeather’s battery use to Unrestricted'
+      // Android also holds it while the phone sleeps (Doze) or is offline, so the advice is conditional
+      const text = s.stale
+        ? s.text + ' — overdue. Android waits while the phone is asleep or offline; if this stays while you use the phone, set GeauxWeather’s battery use to Unrestricted'
         : s.text;
+      if (el.textContent !== text) el.textContent = text; // aria-live: announce changes only
       el.classList.toggle('bg-stale', s.stale);
     } catch (e) {
       console.warn('background status skipped', e);

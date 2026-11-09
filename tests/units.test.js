@@ -109,4 +109,9 @@ test('background status: off, not yet run, normal and stale', () => {
   assert.equal(U.bgStatus(now, now - 75 * min, 30, 0).stale, false); // 2 × 30 + 15 = 75 min allowed
   assert.equal(U.bgStatus(now, now - 76 * min, 30, 0).stale, true);
   assert.match(U.bgStatus(now, now - 10 * 60 * min, 30, 0).text, /last ran \S+ 21:00/); // yesterday shows the weekday
+  // Never ran: overdue counts from when the job was switched on
+  assert.equal(U.bgStatus(now, 0, 30, 0, now - 20 * min).stale, false);
+  assert.equal(U.bgStatus(now, 0, 30, 0, now - 3 * 60 * min).stale, true);
+  assert.equal(U.bgStatus(now, 0, 30, 0, 0).stale, false); // older installs: start time unknown
+  assert.equal(U.bgStatus(now, now - 5 * min, 30, 0, now - 3 * 60 * min).stale, false); // a run wins
 });
