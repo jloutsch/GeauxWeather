@@ -679,7 +679,7 @@
         // Reuses the AQI tile colors: green, yellow, orange, red, violet (WHO UV colors)
         return { label: 'UV', value: Math.round(c.uv_index) + ' · ' + band.text, aqiKey: band.key };
       })(),
-      { label: 'Visibility', value: W.formatVis(c.visibility, units) },
+      { label: 'Visibility', value: U.formatVisibility(c.visibility) },
       { label: 'Precip', value: formatPrecip(c.precipitation) },
       {
         label: 'Pressure',

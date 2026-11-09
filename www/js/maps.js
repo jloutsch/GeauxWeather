@@ -1639,7 +1639,6 @@
       return;
     }
     const c = lastForecast.current;
-    const units = localStorage.getItem('units') || 'imperial';
     const windU = global.GeauxUnits.windLabel();
 
     if (kind === 'wind') {
@@ -1658,9 +1657,7 @@
         '<p class="muted small">At selected location</p>';
       if ($('map-legend')) $('map-legend').textContent = 'Wind · Open-Meteo';
     } else if (kind === 'fog') {
-      const vis = global.PureSkyWeather
-        ? global.PureSkyWeather.formatVis(c.visibility, units)
-        : '—';
+      const vis = global.GeauxUnits.formatVisibility(c.visibility);
       const foggy = c.visibility != null && c.visibility < 1000;
       el.innerHTML =
         '<div class="map-info-title">Visibility / Fog</div>' +
