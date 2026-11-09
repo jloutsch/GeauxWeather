@@ -823,6 +823,29 @@ body.sky-mood-default {
   border-bottom: 1px solid var(--border);
 }
 
+.user-hidden {
+  display: none !important;
+}
+
+.section-order {
+  display: flex;
+  gap: 6px;
+}
+
+.section-order button {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.section-order button:disabled {
+  opacity: 0.3;
+}
+
 .setting-row:last-child {
   border-bottom: none;
 }
