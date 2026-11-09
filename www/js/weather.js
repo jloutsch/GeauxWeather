@@ -61,7 +61,16 @@
   }
 
   /** Forecast models offered in Settings (keyless Open-Meteo); the first is the default. */
-  const MODELS = ['best_match', 'ecmwf_ifs025', 'gfs_seamless', 'gem_seamless'];
+  const MODELS = [
+    'best_match',
+    'ecmwf_ifs025',
+    'gfs_seamless',
+    'gem_seamless',
+    'icon_seamless',
+    'ukmo_seamless',
+    'meteofrance_seamless',
+    'jma_seamless',
+  ];
 
   function forecastModel() {
     try {
@@ -285,6 +294,7 @@
     codeToMood: codeToMood,
     windDir: windDir,
     forecastModel: forecastModel,
+    MODELS: MODELS,
     applyModel: applyModel,
   };
 })(window);

@@ -49,7 +49,13 @@ async function checkOpenMeteo(model) {
 }
 
 async function main() {
-  for (const model of [null, 'ecmwf_ifs025', 'gfs_seamless', 'gem_seamless']) {
+  // Every model the app offers (read from weather.js, so a new model is checked automatically)
+  const offered = (() => {
+    const window = { localStorage: { getItem: () => null, setItem: () => {} } };
+    for (const f of ['www/js/units.js', 'www/js/weather.js']) vm.runInNewContext(fs.readFileSync(f, 'utf8'), { window, URLSearchParams, console });
+    return Array.from(window.PureSkyWeather.MODELS, (m) => (m === 'best_match' ? null : m));
+  })();
+  for (const model of offered) {
     try {
       await checkOpenMeteo(model);
     } catch (e) {
