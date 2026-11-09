@@ -225,91 +225,13 @@
     });
   }
 
-  const unitSelects = document.querySelectorAll('select[data-unit]');
-  function showUnitPrefs() {
-    const u = U.get();
-    unitSelects.forEach(function (sel) {
-      sel.value = u[sel.dataset.unit];
-    });
-  }
-
-  /** Ask Android for its 24-hour switch; redraw if "Automatic" time changed since last launch. */
-  async function syncPhoneClock() {
-    try {
-      const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.GeauxWeatherNative;
-      if (!plugin || !plugin.is24HourFormat) return;
-      const before = U.uses24h();
-      U.setPhone24h((await plugin.is24HourFormat()).value === true);
-      if (U.uses24h() !== before && homeLoc) loadHomeWeather(homeLoc, true);
-    } catch (e) {
-      console.warn('phone clock setting skipped', e);
-    }
-  }
-
-  const S = window.GeauxSections;
-  const sectionsBox = document.getElementById('today-sections-settings');
-  /** Settings → Today screen: a switch per section, plus up/down for the movable ones. */
-  function renderSectionSettings(list) {
-    S.apply(list, document);
-    if (!sectionsBox) return;
-    const movable = list.filter((s) => !S.item(s.id).fixed);
-    sectionsBox.innerHTML = list
-      .map(function (s) {
-        const it = S.item(s.id);
-        const pos = movable.findIndex((m) => m.id === s.id);
-        const arrows = it.fixed
-          ? ''
-          : '<span class="section-order">' +
-            '<button type="button" data-id="' + s.id + '" data-d="-1" aria-label="Move ' + it.label + ' up"' +
-            (pos === 0 ? ' disabled' : '') + '>↑</button>' +
-            '<button type="button" data-id="' + s.id + '" data-d="1" aria-label="Move ' + it.label + ' down"' +
-            (pos === movable.length - 1 ? ' disabled' : '') + '>↓</button></span>';
-        return (
-          '<div class="setting-row"><label><input type="checkbox" data-id="' + s.id + '"' +
-          (s.on ? ' checked' : '') + ' /> ' + it.label + '</label>' + arrows + '</div>'
-        );
-      })
-      .join('');
-  }
-  if (sectionsBox) {
-    sectionsBox.addEventListener('change', function (e) {
-      const id = e.target.dataset && e.target.dataset.id;
-      if (!id) return;
-      const list = S.load().map((s) => (s.id === id ? { id: id, on: e.target.checked } : s));
-      S.save(list);
-      renderSectionSettings(list);
-    });
-    sectionsBox.addEventListener('click', function (e) {
-      const btn = e.target.closest('button[data-d]');
-      if (!btn) return;
-      const list = S.move(S.load(), btn.dataset.id, Number(btn.dataset.d));
-      S.save(list);
-      renderSectionSettings(list);
-      // Keep focus on the moved row; its other arrow if this one just greyed out at the end
-      const row = sectionsBox.querySelectorAll('button[data-id="' + btn.dataset.id + '"]');
-      const next = Array.from(row).find((b) => b.dataset.d === btn.dataset.d && !b.disabled) ||
-        Array.from(row).find((b) => !b.disabled);
-      if (next) next.focus();
-    });
-  }
-
   function loadPrefs() {
-    // Notification and status-bar rows need the Android app; a browser can't act on them
-    if (!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-      document.querySelectorAll('.app-only').forEach((el) => el.classList.add('user-hidden'));
-    }
     if (unitsSelect) unitsSelect.value = units;
-    renderSectionSettings(S.load());
-    showUnitPrefs();
     const skyToggle = document.getElementById('sky-bg-toggle');
     if (skyToggle) skyToggle.checked = skyBgEnabled;
     const hurToggle = document.getElementById('hurricane-alerts-toggle');
     if (hurToggle) {
       hurToggle.checked = localStorage.getItem('geauxweather_hurricane_alerts') === 'on';
-    }
-    const notifToggle = document.getElementById('status-notif-toggle');
-    if (notifToggle) {
-      notifToggle.checked = localStorage.getItem('geauxweather_status_notification') !== 'off';
     }
     syncWidgetStyleControls(loadWidgetStyle());
     const about = document.getElementById('app-about');
@@ -322,159 +244,16 @@
     unitsSelect.addEventListener('change', function () {
       units = unitsSelect.value;
       localStorage.setItem('units', units);
-      showUnitPrefs(); // units the user never picked follow °F/°C
       if (homeLoc) loadHomeWeather(homeLoc, true);
       refreshPlacesWeather(true);
     });
   }
-  const modelSelect = document.getElementById('forecast-model');
-  if (modelSelect) {
-    modelSelect.value = W.forecastModel();
-    modelSelect.addEventListener('change', async function () {
-      localStorage.setItem('forecast_model', modelSelect.value);
-      try {
-        // Widget refresh and the tomorrow's-precipitation notification read it natively
-        const prefs = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
-        if (prefs) await prefs.set({ key: 'geauxweather_model', value: modelSelect.value });
-      } catch (e) {
-        console.warn('model setting skipped', e);
-      }
-      if (homeLoc) loadHomeWeather(homeLoc, true);
-      refreshPlacesWeather(true);
-    });
-  }
-  unitSelects.forEach(function (sel) {
-    sel.addEventListener('change', async function () {
-      U.set(sel.dataset.unit, sel.value);
-      if (sel.dataset.unit === 'clock') {
-        // Clock widget and native notifications read this from Preferences
-        try {
-          const plugins = window.Capacitor && window.Capacitor.Plugins;
-          if (plugins && plugins.Preferences) {
-            await plugins.Preferences.set({ key: 'geauxweather_clock', value: sel.value });
-          }
-          if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.refreshChrome) {
-            await plugins.GeauxWeatherNative.refreshChrome();
-          }
-        } catch (e) {
-          console.warn('clock setting skipped', e);
-        }
-      }
-      if (homeLoc) loadHomeWeather(homeLoc, true);
-      refreshPlacesWeather(true);
-    });
-  });
   const skyBgToggle = document.getElementById('sky-bg-toggle');
   if (skyBgToggle) {
     skyBgToggle.addEventListener('change', function () {
       skyBgEnabled = !!skyBgToggle.checked;
       localStorage.setItem('sky_bg', skyBgEnabled ? 'on' : 'off');
       setSkyMood(lastWeatherCode, lastIsNight);
-    });
-  }
-  // Precipitation (rain or snow) tomorrow: native PrecipNotifyHelper reads these from Preferences
-  const precipToggle = document.getElementById('precip-notify-toggle');
-  const precipThreshold = document.getElementById('precip-threshold');
-  const precipHour = document.getElementById('precip-hour');
-  if (precipToggle && precipThreshold && precipHour) {
-    precipToggle.checked = localStorage.getItem('geauxweather_precip_notify') === 'on';
-    precipThreshold.value = localStorage.getItem('geauxweather_precip_threshold') || '70';
-    precipHour.value = localStorage.getItem('geauxweather_precip_hour') || '18';
-    const savePrecip = async function () {
-      const values = {
-        geauxweather_precip_notify: precipToggle.checked ? 'on' : 'off',
-        geauxweather_precip_threshold: precipThreshold.value,
-        geauxweather_precip_hour: precipHour.value,
-      };
-      try {
-        const plugins = window.Capacitor && window.Capacitor.Plugins;
-        for (const key of Object.keys(values)) {
-          localStorage.setItem(key, values[key]);
-          if (plugins && plugins.Preferences) await plugins.Preferences.set({ key: key, value: values[key] });
-        }
-        // Reschedules the once-a-day check for the new time (or cancels it)
-        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.setPrecipNotify) {
-          await plugins.GeauxWeatherNative.setPrecipNotify({ enabled: precipToggle.checked });
-        }
-      } catch (e) {
-        console.warn('precipitation notification settings skipped', e);
-      }
-    };
-    precipToggle.addEventListener('change', savePrecip);
-    precipThreshold.addEventListener('change', savePrecip);
-    precipHour.addEventListener('change', savePrecip);
-  }
-
-  // High UV today: native UvNotifyHelper reads these from Preferences
-  const uvToggle = document.getElementById('uv-notify-toggle');
-  const uvLevel = document.getElementById('uv-level');
-  const uvHour = document.getElementById('uv-hour');
-  if (uvToggle && uvLevel && uvHour) {
-    uvToggle.checked = localStorage.getItem('geauxweather_uv_notify') === 'on';
-    uvLevel.value = localStorage.getItem('geauxweather_uv_level') || '8';
-    uvHour.value = localStorage.getItem('geauxweather_uv_hour') || '8';
-    const saveUv = async function () {
-      const values = {
-        geauxweather_uv_notify: uvToggle.checked ? 'on' : 'off',
-        geauxweather_uv_level: uvLevel.value,
-        geauxweather_uv_hour: uvHour.value,
-      };
-      try {
-        const plugins = window.Capacitor && window.Capacitor.Plugins;
-        for (const key of Object.keys(values)) {
-          localStorage.setItem(key, values[key]);
-          if (plugins && plugins.Preferences) await plugins.Preferences.set({ key: key, value: values[key] });
-        }
-        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.setUvNotify) {
-          await plugins.GeauxWeatherNative.setUvNotify({ enabled: uvToggle.checked });
-        }
-      } catch (e) {
-        console.warn('UV notification settings skipped', e);
-      }
-    };
-    uvToggle.addEventListener('change', saveUv);
-    uvLevel.addEventListener('change', saveUv);
-    uvHour.addEventListener('change', saveUv);
-  }
-
-  // Rain or snow in the next hour: native NextHourNotifyHelper reads this from Preferences
-  const nextHourToggle = document.getElementById('nexthour-notify-toggle');
-  if (nextHourToggle) {
-    nextHourToggle.checked = localStorage.getItem('geauxweather_nexthour_notify') === 'on';
-    nextHourToggle.addEventListener('change', async function () {
-      const value = nextHourToggle.checked ? 'on' : 'off';
-      localStorage.setItem('geauxweather_nexthour_notify', value);
-      try {
-        const plugins = window.Capacitor && window.Capacitor.Plugins;
-        if (plugins && plugins.Preferences) {
-          await plugins.Preferences.set({ key: 'geauxweather_nexthour_notify', value: value });
-        }
-        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.setNextHourNotify) {
-          await plugins.GeauxWeatherNative.setNextHourNotify({ enabled: nextHourToggle.checked });
-        }
-      } catch (e) {
-        console.warn('next-hour notification setting skipped', e);
-      }
-    });
-  }
-
-  const statusNotifToggle = document.getElementById('status-notif-toggle');
-  if (statusNotifToggle) {
-    statusNotifToggle.addEventListener('change', async function () {
-      const value = statusNotifToggle.checked ? 'on' : 'off';
-      localStorage.setItem('geauxweather_status_notification', value);
-      try {
-        const plugins = window.Capacitor && window.Capacitor.Plugins;
-        if (plugins && plugins.Preferences) {
-          await plugins.Preferences.set({ key: 'geauxweather_status_notification', value: value });
-        }
-        // refreshChrome re-reads the pref: posts the notification when on, cancels it when off
-        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.refreshChrome) {
-          await plugins.GeauxWeatherNative.refreshChrome();
-        }
-      } catch (e) {
-        console.warn('status notification toggle skipped', e);
-      }
     });
   }
   wireWidgetStyleSettings();
@@ -1816,52 +1595,16 @@
     });
   })();
 
-  /**
-   * Settings the Android side acts on are saved twice: Capacitor Preferences (read by native code)
-   * and localStorage (read by these screens). Preferences is the source of truth; copy it into
-   * localStorage and the controls at startup, so a cleared WebView never shows a switch "off" that
-   * is still on natively.
-   */
-  const NATIVE_SETTINGS = [
-    // [Preferences key, localStorage key, control id]
-    ['geauxweather_hurricane_alerts', 'geauxweather_hurricane_alerts', 'hurricane-alerts-toggle'],
-    ['geauxweather_alert_level', 'geauxweather_alert_level', 'alert-level-select'],
-    ['geauxweather_nexthour_notify', 'geauxweather_nexthour_notify', 'nexthour-notify-toggle'],
-    ['geauxweather_precip_notify', 'geauxweather_precip_notify', 'precip-notify-toggle'],
-    ['geauxweather_precip_threshold', 'geauxweather_precip_threshold', 'precip-threshold'],
-    ['geauxweather_precip_hour', 'geauxweather_precip_hour', 'precip-hour'],
-    ['geauxweather_uv_notify', 'geauxweather_uv_notify', 'uv-notify-toggle'],
-    ['geauxweather_uv_level', 'geauxweather_uv_level', 'uv-level'],
-    ['geauxweather_uv_hour', 'geauxweather_uv_hour', 'uv-hour'],
-    ['geauxweather_status_notification', 'geauxweather_status_notification', 'status-notif-toggle'],
-    ['geauxweather_model', 'forecast_model', 'forecast-model'],
-    ['geauxweather_clock', 'unit_clock', 'unit-clock'],
-    ['geauxweather_widget_style', 'geauxweather_widget_style', null], // controls set by loadPrefs()
-  ];
-
-  async function syncSettingsFromNative() {
-    const prefs = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
-    if (!prefs || !(window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) return;
-    try {
-      const values = await Promise.all(NATIVE_SETTINGS.map((s) => prefs.get({ key: s[0] })));
-      NATIVE_SETTINGS.forEach(function (s, i) {
-        const v = values[i] && values[i].value;
-        if (v == null) return; // never set natively: keep what this screen has
-        localStorage.setItem(s[1], v);
-        const el = s[2] && document.getElementById(s[2]);
-        if (!el) return;
-        if (el.type === 'checkbox') el.checked = s[0] === 'geauxweather_status_notification' ? v !== 'off' : v === 'on';
-        else el.value = v;
-      });
-    } catch (e) {
-      console.warn('settings sync from Preferences skipped', e);
-    }
-  }
+  /** For settings-extra.js: reload weather after a setting that changes the forecast data. */
+  window.__geauxReload = function () {
+    if (homeLoc) loadHomeWeather(homeLoc, true);
+    refreshPlacesWeather(true);
+  };
 
   async function boot() {
-    await syncSettingsFromNative(); // before anything reads these settings (first forecast uses the model)
+    // Fork settings (settings-extra.js): Preferences → screens, before anything reads them
+    if (window.GeauxSettingsExtra) await window.GeauxSettingsExtra.beforeBoot();
     loadPrefs();
-    syncPhoneClock();
     showScreen('today');
 
     if (window.PureSkyMaps && window.PureSkyMaps.onPinDrop) {
@@ -1930,7 +1673,6 @@
 
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') {
-      syncPhoneClock(); // the phone's 24-hour switch may have changed while away
       refreshIfStale('visible');
       if (window.PureSkyMaps && typeof window.PureSkyMaps.reloadRadar === 'function') {
         window.PureSkyMaps.reloadRadar();
