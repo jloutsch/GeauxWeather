@@ -133,8 +133,12 @@ public final class UvNotifyHelper {
     static String title(double uv, int level) {
         long n = Math.round(uv);
         if (n < level) return null;
-        String category = n >= 11 ? "Extreme" : n >= 8 ? "Very high" : n >= 6 ? "High" : n >= 3 ? "Moderate" : "Low";
-        return category + " UV today (" + n + ")";
+        return category(n) + " UV today (" + n + ")";
+    }
+
+    /** WHO bands; must match uvLabel() in www/js/weather.js (tested). */
+    static String category(long n) {
+        return n >= 11 ? "Extreme" : n >= 8 ? "Very high" : n >= 6 ? "High" : n >= 3 ? "Moderate" : "Low";
     }
 
     private static int parseInt(String s, int fallback) {
