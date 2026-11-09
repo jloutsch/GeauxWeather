@@ -75,6 +75,16 @@ public class GeauxWeatherNativePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void setNextHourNotify(PluginCall call) {
+        try {
+            NextHourNotifyHelper.setEnabled(getContext(), call.getBoolean("enabled", false));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("setNextHourNotify failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
     public void checkHurricaneAlerts(PluginCall call) {
         try {
             boolean seedOnly = call.getBoolean("seedOnly", false);

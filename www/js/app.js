@@ -292,6 +292,27 @@
     precipHour.addEventListener('change', savePrecip);
   }
 
+  // Rain or snow in the next hour: native NextHourNotifyHelper reads this from Preferences
+  const nextHourToggle = document.getElementById('nexthour-notify-toggle');
+  if (nextHourToggle) {
+    nextHourToggle.checked = localStorage.getItem('geauxweather_nexthour_notify') === 'on';
+    nextHourToggle.addEventListener('change', async function () {
+      const value = nextHourToggle.checked ? 'on' : 'off';
+      localStorage.setItem('geauxweather_nexthour_notify', value);
+      try {
+        const plugins = window.Capacitor && window.Capacitor.Plugins;
+        if (plugins && plugins.Preferences) {
+          await plugins.Preferences.set({ key: 'geauxweather_nexthour_notify', value: value });
+        }
+        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.setNextHourNotify) {
+          await plugins.GeauxWeatherNative.setNextHourNotify({ enabled: nextHourToggle.checked });
+        }
+      } catch (e) {
+        console.warn('next-hour notification setting skipped', e);
+      }
+    });
+  }
+
   const statusNotifToggle = document.getElementById('status-notif-toggle');
   if (statusNotifToggle) {
     statusNotifToggle.addEventListener('change', async function () {
