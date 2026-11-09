@@ -2,6 +2,7 @@ package com.geauxweather.app;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -29,6 +30,21 @@ public class HurricaneAlertHelperTest {
     @Test
     public void minorNeverNotifies() {
         assertFalse(HurricaneAlertHelper.shouldNotify("Frost Advisory", "Minor", true));
+    }
+
+    @Test
+    public void activeStormSpeedsUpEvenIfAFeedFailed() {
+        assertEquals(Boolean.TRUE, HurricaneAlertHelper.nextFastMode(true, false));
+    }
+
+    @Test
+    public void quietAndBothFeedsAnsweredSlowsDown() {
+        assertEquals(Boolean.FALSE, HurricaneAlertHelper.nextFastMode(false, true));
+    }
+
+    @Test
+    public void failedFeedNeverSlowsDown() {
+        assertNull(HurricaneAlertHelper.nextFastMode(false, false));
     }
 
     @Test

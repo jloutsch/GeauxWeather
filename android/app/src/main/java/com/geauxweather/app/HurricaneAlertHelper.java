@@ -63,6 +63,8 @@ public final class HurricaneAlertHelper {
     private static final String KEY_DEFAULT = "geauxweather_default";
     /** "advisories" also notifies on NWS Moderate alerts; anything else = warnings only. Set from Settings. */
     private static final String KEY_LEVEL = "geauxweather_alert_level";
+    /** "on" while a storm-type alert/watch or nearby tropical storm is active → check every 15 min. */
+    private static final String KEY_FAST = "geauxweather_alert_fast";
     private static final String KEY_PENDING_ALERT = "geauxweather_pending_alert";
     public static final String EXTRA_ALERT_JSON = "geauxweather_alert_json";
     public static final String ACTION_OPEN_ALERT = "com.geauxweather.app.OPEN_ALERT";
@@ -93,10 +95,13 @@ public final class HurricaneAlertHelper {
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
+        boolean fast = "on".equals(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_FAST, "off"));
         PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(
                 HurricaneAlertWorker.class,
-                // WorkManager's minimum. Tornado warnings often last 30–45 min, so 2 h could miss them entirely.
-                15,
+                // 15 min (WorkManager's minimum) while storms are active: warnings often last 30–45 min.
+                // Otherwise 60 min to save battery; a watch for the location switches back to 15 min.
+                // shortcut: a warning issued with no prior watch can wait up to ~60 min; upgrade to push alerts if that matters.
+                fast ? 15 : 60,
                 TimeUnit.MINUTES
         )
                 .setConstraints(constraints)
@@ -135,16 +140,47 @@ public final class HurricaneAlertHelper {
         boolean firstRun = prev.length() == 0;
         boolean quiet = seedOnly || firstRun;
 
+        boolean nwsOk = false;
+        boolean nhcOk = false;
         try {
-            checkNwsPoint(context, lat, lon, placeLabel, prev, next, quiet);
+            nwsOk = checkNwsPoint(context, lat, lon, placeLabel, prev, next, quiet);
         } catch (Exception ignored) {
         }
         try {
-            checkNhCNearby(context, lat, lon, placeLabel, prev, next, quiet);
+            nhcOk = checkNhCNearby(context, lat, lon, placeLabel, prev, next, quiet);
         } catch (Exception ignored) {
         }
 
         prefs.edit().putString(KEY_SEEN, next.toString()).apply();
+
+        Boolean fast = nextFastMode(stormActive(next), nwsOk && nhcOk);
+        String wanted = fast == null ? null : (fast ? "on" : "off");
+        if (wanted != null && !wanted.equals(prefs.getString(KEY_FAST, "off"))) {
+            prefs.edit().putString(KEY_FAST, wanted).apply();
+            if (isEnabled(context)) schedule(context);
+        }
+    }
+
+    /**
+     * Speed up as soon as a storm is seen; slow down only when both feeds answered and
+     * showed nothing, so a failed request never drops to hourly during an active watch.
+     * @return true = 15 min, false = 60 min, null = keep the current interval
+     */
+    static Boolean nextFastMode(boolean stormActive, boolean bothFeedsOk) {
+        if (stormActive) return true;
+        return bothFeedsOk ? Boolean.FALSE : null;
+    }
+
+    /** Any storm-type NWS alert or watch (tornado, thunderstorm, flood, tropical…) or a nearby NHC storm. */
+    static boolean stormActive(JSONObject seen) {
+        java.util.Iterator<String> keys = seen.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            if (key.startsWith("nhc:")) return true;
+            JSONObject fp = seen.optJSONObject(key);
+            if (fp != null && isSevereEvent(fp.optString("event", ""))) return true;
+        }
+        return false;
     }
 
     public static void showAlert(Context context, String title, String body, String tag) {
@@ -179,7 +215,7 @@ public final class HurricaneAlertHelper {
 
     // ─── NWS local alerts ─────────────────────────────────────────────────
 
-    private static void checkNwsPoint(
+    private static boolean checkNwsPoint(
             Context context,
             double lat,
             double lon,
@@ -195,11 +231,11 @@ public final class HurricaneAlertHelper {
                 lon
         );
         String body = httpGet(url, "application/geo+json,application/json");
-        if (body == null || body.isEmpty()) return;
+        if (body == null || body.isEmpty()) return false;
 
         JSONObject root = new JSONObject(body);
         JSONArray features = root.optJSONArray("features");
-        if (features == null) return;
+        if (features == null) return true;
         boolean includeAdvisories = "advisories".equals(
                 context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_LEVEL, "warnings"));
 
@@ -268,6 +304,7 @@ public final class HurricaneAlertHelper {
                     detail
             );
         }
+        return true;
     }
 
     private static boolean isSevereEvent(String event) {
@@ -298,7 +335,7 @@ public final class HurricaneAlertHelper {
 
     // ─── NHC tropical near location ───────────────────────────────────────
 
-    private static void checkNhCNearby(
+    private static boolean checkNhCNearby(
             Context context,
             double lat,
             double lon,
@@ -308,11 +345,11 @@ public final class HurricaneAlertHelper {
             boolean quiet
     ) throws Exception {
         String body = httpGet(NHC_URL, "application/json");
-        if (body == null || body.isEmpty()) return;
+        if (body == null || body.isEmpty()) return false;
 
         JSONObject root = new JSONObject(body);
         JSONArray storms = root.optJSONArray("activeStorms");
-        if (storms == null) return;
+        if (storms == null) return true;
 
         for (int i = 0; i < storms.length(); i++) {
             JSONObject s = storms.optJSONObject(i);
@@ -407,6 +444,7 @@ public final class HurricaneAlertHelper {
                 }
             }
         }
+        return true;
     }
 
     // ─── Location ─────────────────────────────────────────────────────────
