@@ -435,6 +435,13 @@
       riseEl.textContent = formatTimeISO(data.daily.sunrise ? data.daily.sunrise[0] : null);
       setEl.textContent = formatTimeISO(data.daily.sunset ? data.daily.sunset[0] : null);
     }
+    const moon = W.moonPhase(new Date(), homeLoc ? homeLoc.lat : 0);
+    const moonEl = document.getElementById('moon-value');
+    if (moonEl) {
+      moonEl.textContent = moon.icon + ' ' + moon.illumination + '%';
+      document.getElementById('moon-name').textContent = moon.name;
+      document.getElementById('moon-now').setAttribute('aria-label', 'Moon: ' + moon.name + ', ' + moon.illumination + '% lit');
+    }
 
     const metrics = [
       {
