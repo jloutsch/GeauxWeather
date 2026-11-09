@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write # the sync PR's result (see "Report the result to the sync PR")
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -20,8 +21,21 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      # A run started by upstream-sync.yml doesn't appear in its PR's checks; a commit status does
+      - name: Mark the sync PR pending
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }} # only these two steps, not npm/Gradle scripts
+        run: >-
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state=pending -f context="CI (sync branch)"
+          -f target_url="$RUN_URL" -f description="Tests, lint and build running"
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false # nothing here pushes; keep the token out of .git/config
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -67,3 +81,13 @@ jobs:
             android/app/build/reports/
             android/app/build/test-results/
           retention-days: 14
+
+      - name: Report the result to the sync PR
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        run: |
+          case "$STATUS" in success) state=success ;; failure) state=failure ;; *) state=error ;; esac
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state="$state" -f context="CI (sync branch)" \
+            -f target_url="$RUN_URL" -f description="Tests, lint and build: $STATUS"
