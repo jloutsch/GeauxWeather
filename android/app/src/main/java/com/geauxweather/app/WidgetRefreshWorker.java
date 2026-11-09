@@ -111,6 +111,7 @@ public class WidgetRefreshWorker extends Worker {
                 && System.currentTimeMillis() - prev.optLong("updatedAt", 0) < FRESH_MS) return true;
         String units = prev != null ? prev.optString("units", "imperial") : "imperial";
 
+        JSONObject json;
         try {
             String url = String.format(Locale.US,
                     "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
@@ -121,15 +122,14 @@ public class WidgetRefreshWorker extends Worker {
                     loc[0], loc[1], "metric".equals(units) ? "" : "&temperature_unit=fahrenheit");
             String body = HurricaneAlertHelper.httpGet(url, "application/json");
             if (body == null) return false;
-            JSONObject json = new JSONObject(body);
+            json = new JSONObject(body);
             JSONObject c = json.getJSONObject("current");
             JSONObject d = json.optJSONObject("daily");
             int code = c.optInt("weather_code", -1);
             int isDay = c.optInt("is_day", 1) == 0 ? 0 : 1;
 
             JSONObject snap = new JSONObject();
-            String label = HurricaneAlertHelper.resolveLocationLabel(prefs);
-            snap.put("label", label);
+            snap.put("label", HurricaneAlertHelper.resolveLocationLabel(prefs));
             snap.put("temp", Math.round(c.getDouble("temperature_2m")) + "°");
             snap.put("condition", condition(code, isDay == 1));
             snap.put("weatherCode", code);
@@ -139,12 +139,16 @@ public class WidgetRefreshWorker extends Worker {
             snap.put("units", units);
             snap.put("updatedAt", System.currentTimeMillis());
             prefs.edit().putString(KEY_WIDGET, snap.toString()).apply();
-            NextHourNotifyHelper.check(context, json, label);
         } catch (Exception e) {
             return false;
         }
         GeauxWeatherWidgetProvider.refreshAll(context); // also redraws the clock widget
         WeatherNotificationHelper.update(context);
+        try {
+            // After the redraw, so a notification failure can't leave the widgets stale
+            NextHourNotifyHelper.check(context, json, HurricaneAlertHelper.resolveLocationLabel(prefs));
+        } catch (Exception ignored) {
+        }
         return true;
     }
 

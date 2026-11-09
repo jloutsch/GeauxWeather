@@ -61,7 +61,10 @@ public final class NextHourNotifyHelper {
 
     /** Called from Settings. Starts or stops the shared 30-minute job as needed. */
     public static void setEnabled(Context context, boolean enabled) {
-        prefs(context).edit().putString(KEY_ENABLED, enabled ? "on" : "off").apply();
+        SharedPreferences.Editor edit = prefs(context).edit().putString(KEY_ENABLED, enabled ? "on" : "off");
+        // A wet marker left from before it was turned off would swallow the next rain's notification
+        if (enabled) edit.remove(KEY_WET);
+        edit.apply();
         if (enabled) {
             WidgetRefreshWorker.ensureScheduled(context);
             new Thread(() -> WidgetRefreshWorker.refresh(context)).start(); // check now, not in up to 30 min
