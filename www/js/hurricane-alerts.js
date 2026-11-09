@@ -274,7 +274,9 @@
   function diffAndCollect(loc, nwsAlerts, tropical, opts) {
     opts = opts || {};
     const seedOnly = !!opts.seedOnly;
-    const prev = loadSeen();
+    // listAll: every active alert, and leave the seen record alone so notifications still fire
+    const listAll = !!opts.listAll;
+    const prev = listAll ? {} : loadSeen();
     const next = {};
     const alerts = [];
     const place = (loc && loc.label) || 'your location';
@@ -394,7 +396,7 @@
       }
     }
 
-    saveSeen(next);
+    if (!listAll) saveSeen(next);
     return alerts;
   }
 
@@ -589,6 +591,68 @@
     });
   }
 
+  const SEVERITY_RANK = { Extreme: 0, Severe: 1, Moderate: 2, Minor: 3 };
+
+  /** Every active alert, most severe first (nearby hurricanes count as Severe). */
+  function collectForList(loc, nws, tropical) {
+    const rank = function (a) {
+      const s = a.detail && a.detail.severity;
+      return a.detail && a.detail.kind === 'nhc' ? 1 : s in SEVERITY_RANK ? SEVERITY_RANK[s] : 4;
+    };
+    return diffAndCollect(loc, nws, tropical, { listAll: true }).sort(function (a, b) {
+      return rank(a) - rank(b);
+    });
+  }
+
+  /** Today screen: active alerts for the home/default location; tap opens the detail sheet. */
+  async function renderActiveList() {
+    const el = document.getElementById('alerts-list');
+    if (!el) return;
+    const loc = await resolveAlertLocation();
+    let nws = [];
+    let tropical = [];
+    if (loc) {
+      try {
+        nws = await fetchNwsAtPoint(loc.lat, loc.lon);
+      } catch (e) {
+        // Keep what is shown: one failed request (offline, NWS 500) must not hide an active warning.
+        // When nothing is shown (e.g. outside the US, where NWS always fails) still list nearby storms.
+        if (!el.classList.contains('hidden')) return;
+      }
+      try {
+        tropical = await fetchNearbyTropical(loc.lat, loc.lon);
+      } catch (e) {}
+    }
+    const items = loc ? collectForList(loc, nws, tropical) : [];
+    el.innerHTML = items
+      .map(function (a, i) {
+        const d = a.detail || {};
+        let when = '';
+        if (d.ends) {
+          const t = new Date(d.ends);
+          if (!isNaN(t)) {
+            when = 'Until ' + t.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+          }
+        }
+        const sub = [when || d.description, d.place].filter(Boolean).join(' · ');
+        return (
+          '<button type="button" class="alert-item sev-' +
+          escapeHtml(String(d.severity || '').toLowerCase()) +
+          '" data-i="' + i + '">' +
+          '<span class="alert-item-title">' + escapeHtml(a.title) + '</span>' +
+          '<span class="alert-item-sub">' + escapeHtml(sub) + '</span>' +
+          '</button>'
+        );
+      })
+      .join('');
+    el.classList.toggle('hidden', items.length === 0);
+    el.querySelectorAll('.alert-item').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        showAlertSheet(items[Number(btn.dataset.i)].detail);
+      });
+    });
+  }
+
   function escapeHtml(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;')
@@ -766,6 +830,8 @@
     openFromNotification: openFromNotification,
     shouldNotify: shouldNotify,
     mapLayerForEvent: mapLayerForEvent,
+    renderActiveList: renderActiveList,
+    collectForList: collectForList,
   };
   global.PureSkySevereAlerts = global.PureSkyHurricaneAlerts;
   global.PureSkySevere = global.PureSkyHurricaneAlerts;
