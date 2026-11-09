@@ -86,6 +86,26 @@ async function main() {
         }
       }
     },
+    'environment canada alerts': async () => {
+      const j = await getJson('https://api.weather.gc.ca/collections/weather-alerts/items?f=json&lang=en&limit=5');
+      check('eccc features[]', Array.isArray(j.features), 'no features array');
+      const p = j.features && j.features[0] && j.features[0].properties;
+      if (p) {
+        for (const f of ['alert_type', 'alert_name_en', 'feature_id', 'feature_name_en', 'alert_text_en', 'status_en', 'expiration_datetime']) {
+          check(`eccc properties.${f}`, f in p, 'field missing');
+        }
+      }
+    },
+    'bright sky (dwd) alerts': async () => {
+      const j = await getJson('https://api.brightsky.dev/alerts?lat=52.52&lon=13.40');
+      check('brightsky alerts[] + location', Array.isArray(j.alerts) && j.location && 'warn_cell_id' in j.location, 'alerts/location.warn_cell_id');
+      const a = j.alerts && j.alerts[0];
+      if (a) {
+        for (const f of ['event_code', 'event_en', 'severity', 'headline_en', 'description_en', 'expires', 'status']) {
+          check(`brightsky alerts[0].${f}`, f in a, 'field missing');
+        }
+      }
+    },
     'rainviewer': async () => {
       const j = await getJson('https://api.rainviewer.com/public/weather-maps.json');
       check('rainviewer host + radar.past[]', j.host && j.radar && Array.isArray(j.radar.past) && j.radar.past.length, 'host/radar.past');

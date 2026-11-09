@@ -204,7 +204,9 @@ public class GeauxWeatherNativePlugin extends Plugin {
                     || host.endsWith(".rainviewer.com")
                     || host.equals("rainviewer.com")
                     || host.endsWith(".open-meteo.com")
-                    || host.equals("open-meteo.com");
+                    || host.equals("open-meteo.com")
+                    || host.equals("api.weather.gc.ca")   // Environment Canada alerts
+                    || host.equals("api.brightsky.dev");  // DWD (Germany) alerts
         } catch (Exception e) {
             return false;
         }

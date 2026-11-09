@@ -159,3 +159,95 @@ test('in the app, no web polling even if the plugin methods are not attached yet
   vm.runInNewContext(src, sandbox);
   assert.deepEqual(timers.filter((ms) => ms === 4000 || ms === 15 * 60 * 1000), []);
 });
+
+// ── Alerts outside the U.S. (#4 item 2) ──────────────────────────────────────
+
+const ECCC = {
+  features: [
+    { id: 'x1', properties: { alert_type: 'warning', alert_name_en: 'winter storm warning', feature_id: 'fea1-2302',
+      feature_name_en: 'Haida Gwaii', alert_text_en: 'Snow 30 cm.', event_end_datetime: '2026-11-11T05:00:00Z', status_en: 'continued' } },
+    { id: 'x2', properties: { alert_type: 'statement', alert_name_en: 'special weather statement', feature_id: 'fea1-9',
+      feature_name_en: 'North Coast', status_en: 'new' } },
+    { id: 'x3', properties: { alert_type: 'warning', alert_name_en: 'wind warning', feature_id: 'fea1-5', status_en: 'ended' } },
+  ],
+};
+const BRIGHTSKY = {
+  location: { name: 'Berl. - Mitte', district: 'Berlin', warn_cell_id: 711000101 },
+  alerts: [
+    { alert_id: 'a1', event_code: 22, event_en: 'frost', severity: 'minor', headline_en: 'Official WARNING of FROST',
+      description_en: 'Risk of frost', instruction_en: 'Protect plants', expires: '2026-11-10T08:00:00+00:00', status: 'actual' },
+    { alert_id: 'a2', event_code: 52, event_en: 'storm gusts', severity: 'severe', headline_en: 'Official WARNING of STORM GUSTS',
+      status: 'actual' },
+    { alert_id: 't', event_code: 1, event_en: 'test', severity: 'minor', status: 'test' },
+  ],
+};
+
+test('Environment Canada alerts become NWS-style alerts; ended ones are dropped', () => {
+  const out = A.fromEccc(ECCC);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].event, 'Winter Storm Warning');
+  assert.equal(out[0].severity, 'Severe');
+  assert.equal(out[0].areaDesc, 'Haida Gwaii');
+  assert.equal(out[0].ends, '2026-11-11T05:00:00Z');
+  assert.equal(out[0].id, 'eccc:winter storm warning|fea1-2302'); // stable across re-issues
+  assert.equal(out[1].severity, 'Minor'); // statements are skipped, like NWS Minor alerts
+  assert.ok(A.shouldNotify(out[0], 'warnings'));
+  assert.equal(A.shouldNotify(out[1], 'advisories'), false);
+});
+
+test('Bright Sky (DWD) alerts become NWS-style alerts; test messages are dropped', () => {
+  const out = A.fromBrightSky(BRIGHTSKY);
+  assert.equal(out.length, 2);
+  assert.deepEqual(Array.from(out, (a) => a.event), ['Frost', 'Storm Gusts']);
+  assert.deepEqual(Array.from(out, (a) => a.severity), ['Minor', 'Severe']);
+  assert.equal(out[0].areaDesc, 'Berl. - Mitte');
+  assert.equal(out[0].id, 'dwd:22|minor|711000101');
+  assert.equal(A.shouldNotify(out[0], 'advisories'), false); // minor frost: skipped
+  assert.ok(A.shouldNotify(out[1], 'warnings'));
+});
+
+/** Loads hurricane-alerts.js with a fake PureSkyNet that answers by host. */
+function loadWithNet(answers) {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'www', 'js', 'hurricane-alerts.js'), 'utf8');
+  const noop = () => {};
+  const asked = [];
+  const sandbox = {
+    window: {
+      PureSkyNet: {
+        fetch: async (url) => {
+          const host = new URL(url).hostname;
+          asked.push(host);
+          const a = answers[host];
+          if (typeof a === 'number') throw new Error('HTTP ' + a);
+          return a;
+        },
+      },
+    },
+    console, URL, setTimeout: noop, setInterval: noop, clearInterval: noop,
+    localStorage: { getItem: () => null, setItem: noop },
+    document: { readyState: 'complete', getElementById: () => null, querySelector: () => null, addEventListener: noop },
+  };
+  vm.runInNewContext(src, sandbox);
+  return { A: sandbox.window.PureSkyHurricaneAlerts, asked };
+}
+
+test('outside the U.S. (NWS 400) Canada uses Environment Canada', async () => {
+  const { A: X, asked } = loadWithNet({ 'api.weather.gov': 400, 'api.weather.gc.ca': ECCC });
+  const out = await X.fetchPointAlerts(53.25, -132.07); // Haida Gwaii
+  assert.deepEqual(asked, ['api.weather.gov', 'api.weather.gc.ca']);
+  assert.equal(out[0].event, 'Winter Storm Warning');
+});
+
+test('in Germany it uses Bright Sky; a 404 there means "not covered", not a failure', async () => {
+  const de = loadWithNet({ 'api.weather.gov': 400, 'api.brightsky.dev': BRIGHTSKY });
+  assert.equal((await de.A.fetchPointAlerts(52.52, 13.4)).length, 2);
+  assert.deepEqual(de.asked, ['api.weather.gov', 'api.brightsky.dev']);
+  const edge = loadWithNet({ 'api.weather.gov': 400, 'api.brightsky.dev': 404 });
+  assert.deepEqual(Array.from(await edge.A.fetchPointAlerts(47.5, 7.6)), []); // Basel, inside the box but Swiss
+});
+
+test('a real NWS failure is still a failure (keeps the seen record), not a switch to Canada', async () => {
+  const { A: X, asked } = loadWithNet({ 'api.weather.gov': 503 });
+  await assert.rejects(X.fetchPointAlerts(42.48, -71.1), /HTTP 503/);
+  assert.deepEqual(asked, ['api.weather.gov']);
+});

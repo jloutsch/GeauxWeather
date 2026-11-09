@@ -63,4 +63,29 @@ public class HurricaneAlertHelperTest {
         assertFalse(HurricaneAlertHelper.isFirstRun(1_794_000_000_000L, 0));
         assertFalse(HurricaneAlertHelper.isFirstRun(0, 2)); // older install with alerts on record
     }
+
+    @Test
+    public void canadianAlertTypesMapToNwsSeverities() {
+        assertEquals("Severe", HurricaneAlertHelper.ecccSeverity("warning"));
+        assertEquals("Severe", HurricaneAlertHelper.ecccSeverity("watch"));
+        assertEquals("Moderate", HurricaneAlertHelper.ecccSeverity("advisory"));
+        assertEquals("Minor", HurricaneAlertHelper.ecccSeverity("statement"));
+        assertTrue(HurricaneAlertHelper.shouldNotify("Winter Storm Warning", "Severe", false));
+        assertFalse(HurricaneAlertHelper.shouldNotify("Special Weather Statement", "Minor", true));
+    }
+
+    @Test
+    public void eventNamesAreTitleCased() {
+        assertEquals("Winter Storm Warning", HurricaneAlertHelper.titleCase("winter storm warning"));
+        assertEquals("Storm Gusts", HurricaneAlertHelper.titleCase("storm gusts"));
+        assertEquals("Post-Tropical", HurricaneAlertHelper.titleCase("post-tropical"));
+    }
+
+    @Test
+    public void germanyBoxPicksTheDwd() {
+        assertTrue(HurricaneAlertHelper.inGermany(52.52, 13.40));  // Berlin
+        assertTrue(HurricaneAlertHelper.inGermany(48.14, 11.58));  // Munich
+        assertFalse(HurricaneAlertHelper.inGermany(53.25, -132.07)); // Haida Gwaii
+        assertFalse(HurricaneAlertHelper.inGermany(48.86, 2.35));   // Paris
+    }
 }

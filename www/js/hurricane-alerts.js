@@ -239,20 +239,99 @@
     return as === 'text' ? res.text() : res.json();
   }
 
-  async function fetchNwsAtPoint(lat, lon) {
-    const url =
-      'https://api.weather.gov/alerts/active?status=actual&point=' +
-      encodeURIComponent(lat.toFixed(4) + ',' + lon.toFixed(4));
-    const geo = await netFetch(url, 'json');
-    const features = (geo && geo.features) || [];
-    const level = alertLevel();
-    const out = [];
-    for (let i = 0; i < features.length; i++) {
-      const props = features[i].properties || {};
-      if (!shouldNotify(props, level)) continue;
-      out.push(props);
+  /** Germany, roughly; Bright Sky answers "not covered" for the bits of neighbours this box includes. */
+  function inGermany(lat, lon) {
+    return lat >= 47.2 && lat <= 55.1 && lon >= 5.8 && lon <= 15.1;
+  }
+
+  function titleCase(s) {
+    return String(s || '').replace(/(^|[\s-])([a-z])/g, (m, a, b) => a + b.toUpperCase());
+  }
+
+  /** Environment Canada alert type → NWS severity: warnings/watches notify, advisories with "+ advisories", statements are skipped (like NWS Minor alerts). */
+  function ecccSeverity(type) {
+    return type === 'warning' || type === 'watch' ? 'Severe' : type === 'advisory' ? 'Moderate' : 'Minor';
+  }
+
+  /** Environment Canada (MSC GeoMet) alerts → NWS-style properties. */
+  function fromEccc(geo) {
+    return ((geo && geo.features) || [])
+      .filter((f) => f.properties && !/ended|cancel/i.test(f.properties.status_en || ''))
+      .map(function (f) {
+        const p = f.properties;
+        const event = titleCase(p.alert_name_en || 'Weather alert');
+        return {
+          // Re-issues get new ids; name + area notifies once per alert per area until it ends
+          id: 'eccc:' + p.alert_name_en + '|' + (p.feature_id || p.feature_name_en),
+          event: event,
+          severity: ecccSeverity(p.alert_type),
+          headline: event + ' in effect',
+          areaDesc: p.feature_name_en || '',
+          description: p.alert_text_en || '',
+          instruction: '',
+          ends: p.event_end_datetime || p.expiration_datetime || '',
+          sent: p.publication_datetime || '',
+          source: 'Environment Canada',
+        };
+      });
+  }
+
+  /** Bright Sky (Deutscher Wetterdienst) alerts → NWS-style properties. */
+  function fromBrightSky(json) {
+    const place = (json && json.location && (json.location.name || json.location.district)) || '';
+    const cell = (json && json.location && json.location.warn_cell_id) || '';
+    return ((json && json.alerts) || [])
+      .filter((a) => a.status !== 'test')
+      .map((a) => ({
+        // DWD updates get new ids; event + severity + warning area notifies again only when it escalates
+        id: 'dwd:' + a.event_code + '|' + a.severity + '|' + cell,
+        event: titleCase(a.event_en || 'Weather warning'),
+        severity: titleCase(a.severity || 'minor'),
+        headline: a.headline_en || '',
+        areaDesc: place,
+        description: a.description_en || '',
+        instruction: a.instruction_en || '',
+        ends: a.expires || '',
+        sent: a.effective || '',
+        source: 'DWD',
+      }));
+  }
+
+  /**
+   * Alerts for a point as NWS-style properties: NWS in the U.S.; outside it (NWS answers 400 for a point
+   * it doesn't cover) the DWD via Bright Sky in Germany, else Environment Canada (empty outside Canada).
+   */
+  async function fetchPointAlerts(lat, lon) {
+    const q = encodeURIComponent(lat.toFixed(4) + ',' + lon.toFixed(4));
+    try {
+      const geo = await netFetch('https://api.weather.gov/alerts/active?status=actual&point=' + q, 'json');
+      return ((geo && geo.features) || []).map((f) => f.properties || {});
+    } catch (e) {
+      if (!/HTTP 400\b/.test(String(e && e.message))) throw e; // a real failure, not "outside the U.S."
     }
-    return out;
+    if (inGermany(lat, lon)) {
+      try {
+        return fromBrightSky(
+          await netFetch('https://api.brightsky.dev/alerts?lat=' + lat.toFixed(4) + '&lon=' + lon.toFixed(4), 'json')
+        );
+      } catch (e) {
+        if (!/HTTP 404\b/.test(String(e && e.message))) throw e; // 404: not covered by the DWD
+        return [];
+      }
+    }
+    const d = 0.001;
+    return fromEccc(
+      await netFetch(
+        'https://api.weather.gc.ca/collections/weather-alerts/items?f=json&lang=en&bbox=' +
+          [lon - d, lat - d, lon + d, lat + d].map((v) => v.toFixed(4)).join(','),
+        'json'
+      )
+    );
+  }
+
+  async function fetchNwsAtPoint(lat, lon) {
+    const level = alertLevel();
+    return (await fetchPointAlerts(lat, lon)).filter((props) => shouldNotify(props, level));
   }
 
   async function fetchNearbyTropical(lat, lon) {
@@ -611,12 +690,12 @@
       if (!hint) return;
       if (loc && loc.label) {
         hint.textContent =
-          'NWS warnings & watches (tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for ' +
+          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD: tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for ' +
           loc.label +
           ' (home or default), checked about hourly, and every 15 minutes while a storm watch or warning is active. Tap a notification to open the map + details.';
       } else {
         hint.textContent =
-          'NWS warnings & watches (tornado, thunderstorm, flood, winter storm, high wind…) and nearby tropical storms for your home or default location. Set a location first.';
+          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD: tornado, thunderstorm, flood, winter storm, high wind…) and nearby tropical storms for your home or default location. Set a location first.';
       }
     });
   }
@@ -646,7 +725,7 @@
         nws = await fetchNwsAtPoint(loc.lat, loc.lon);
       } catch (e) {
         // Keep what is shown: one failed request (offline, NWS 500) must not hide an active warning.
-        // When nothing is shown (e.g. outside the US, where NWS always fails) still list nearby storms.
+        // When nothing is shown still list nearby storms.
         if (!el.classList.contains('hidden')) return;
       }
       try {
@@ -862,6 +941,9 @@
     renderActiveList: renderActiveList,
     collectForList: collectForList,
     diffAndCollect: diffAndCollect,
+    fetchPointAlerts: fetchPointAlerts,
+    fromEccc: fromEccc,
+    fromBrightSky: fromBrightSky,
   };
   global.PureSkySevereAlerts = global.PureSkyHurricaneAlerts;
   global.PureSkySevere = global.PureSkyHurricaneAlerts;
