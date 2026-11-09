@@ -363,6 +363,13 @@
     return (Math.round(val * 100) / 100) + ' in';
   }
 
+  // Open-Meteo returns snowfall in inches with precipitation_unit=inch, otherwise in cm
+  function formatSnow(val, withUnit) {
+    const n = Number(val);
+    const amount = n < 0.1 ? '<0.1' : String(Math.round(n * 10) / 10);
+    return withUnit ? amount + (units === 'metric' ? ' cm' : ' in') : amount;
+  }
+
   function formatTimeISO(iso) {
     if (!iso) return '—';
     try {
@@ -673,7 +680,11 @@
       }
     }
     const cards = [];
-    for (let i = start; i < Math.min(start + 24, h.time.length); i++) {
+    const end = Math.min(start + 24, h.time.length);
+    // Snow line only when snow is expected somewhere in these hours; blank lines keep cards level
+    let anySnow = false;
+    for (let i = start; i < end; i++) if (h.snowfall && h.snowfall[i] > 0) anySnow = true;
+    for (let i = start; i < end; i++) {
       const t = new Date(h.time[i]);
       // Compact hour labels (avoid wrap under large Android font/display sizes)
       let label = 'Now';
@@ -716,6 +727,13 @@
           '°</div>' +
           windHtml +
           popHtml +
+          (anySnow
+            ? h.snowfall[i] > 0
+              ? '<div class="hour-snow" title="Snowfall (' + (units === 'metric' ? 'cm' : 'in') + ')">❄' +
+                formatSnow(h.snowfall[i], false) +
+                '</div>'
+              : '<div class="hour-snow"></div>'
+            : '') +
           '</div>'
       );
     }
@@ -734,6 +752,7 @@
           : null;
       const pop = popVal != null ? popVal + '%' : '—';
       const precip = formatPrecip(d.precipitation_sum ? d.precipitation_sum[i] : 0);
+      const snow = d.snowfall_sum && d.snowfall_sum[i] > 0 ? formatSnow(d.snowfall_sum[i], true) : null;
       const uv =
         d.uv_index_max && d.uv_index_max[i] != null
           ? Math.round(d.uv_index_max[i])
@@ -769,6 +788,10 @@
         '</div>' +
         '<div class="day-pop">' +
         (popVal != null && popVal > 0 ? pop : '') +
+        // Traces (< 0.1) only in the expanded details, to keep the list uncluttered
+        (snow && d.snowfall_sum[i] >= 0.1
+          ? '<span class="day-snow">❄' + formatSnow(d.snowfall_sum[i], false) + '</span>'
+          : '') +
         '</div>' +
         '<div class="day-wind" title="Max wind">' +
         (windMax != null ? windLabel : '') +
@@ -791,6 +814,7 @@
         '<div><span class="muted">Chance</span><strong>' +
         pop +
         '</strong></div>' +
+        (snow ? '<div><span class="muted">Snow</span><strong>' + snow + '</strong></div>' : '') +
         '<div><span class="muted">Wind max</span><strong>' +
         windDetail +
         '</strong></div>' +

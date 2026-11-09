@@ -1315,6 +1315,15 @@ button.setting-btn:active {
   line-height: 1.2;
   white-space: nowrap;
 }
+.hour-snow,
+.day-snow {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text);
+  min-height: 1em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
 .hour-pop.dim {
   color: var(--text-muted);
   opacity: 0.5;
