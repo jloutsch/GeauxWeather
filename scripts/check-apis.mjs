@@ -3,14 +3,34 @@
 // The Open-Meteo requests are built by the app's own www/js/weather.js, so they can't drift from it.
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 
 const UA = { 'User-Agent': 'GeauxWeather API check (github.com/jloutsch/GeauxWeather)', Accept: 'application/json' };
 const problems = [];
 const ok = [];
 const check = (name, cond, detail) => (cond ? ok.push(name) : problems.push(`${name}: ${detail}`));
 
+/**
+ * fetch with two retries for answers that say "try later" (429 rate limit, 502/503/504) and network
+ * errors, so a busy server doesn't open a false "API changed" issue. Waits Retry-After (≤30 s) or 5 s, 15 s.
+ */
+export async function fetchRetry(url, opts, waits = [5000, 15000], doFetch = fetch) {
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await doFetch(url, opts);
+      if (![429, 502, 503, 504].includes(res.status)) return res;
+    } catch (e) {
+      if (attempt >= waits.length) throw e;
+    }
+    if (attempt >= waits.length) return res;
+    const after = res && Number(res.headers.get('retry-after'));
+    await new Promise((r) => setTimeout(r, after > 0 ? Math.min(after, 30) * 1000 : waits[attempt]));
+  }
+}
+
 async function getJson(url, headers) {
-  const res = await fetch(url, { headers: headers || UA });
+  const res = await fetchRetry(url, { headers: headers || UA });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url.split('?')[0]}`);
   return res.json();
 }
@@ -20,11 +40,11 @@ async function checkOpenMeteo(model) {
   const requested = {};
   const recordingFetch = (url) => {
     const u = new URL(url);
-    if (u.hostname !== 'api.open-meteo.com') return fetch(url); // air quality is checked below
+    if (u.hostname !== 'api.open-meteo.com') return fetchRetry(url); // air quality is checked below
     for (const block of ['current', 'hourly', 'daily', 'minutely_15']) {
       if (u.searchParams.get(block)) requested[block] = u.searchParams.get(block).split(',');
     }
-    return fetch(url);
+    return fetchRetry(url);
   };
   // Load units.js + weather.js the way index.html does, with the model choice in localStorage
   const store = model ? { forecast_model: model } : {};
@@ -153,4 +173,6 @@ async function main() {
   }
 }
 
-await main();
+// Run the checks only when executed directly (tests import fetchRetry). Real paths, so a symlinked
+// or space-containing path still runs them; the workflow also fails if no "checks passed" line appears.
+if (process.argv[1] && fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(process.argv[1])) await main();

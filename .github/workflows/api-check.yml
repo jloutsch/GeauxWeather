@@ -35,6 +35,8 @@ jobs:
         run: |
           set -o pipefail
           node scripts/check-apis.mjs | tee api-check.txt
+          # A run that checked nothing must not pass
+          grep -q "checks passed" api-check.txt
 
       - name: Report a failed scheduled check
         if: failure() && github.event_name != 'pull_request'
