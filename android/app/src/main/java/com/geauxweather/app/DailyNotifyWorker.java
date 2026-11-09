@@ -21,31 +21,44 @@ package com.geauxweather.app;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
+import androidx.work.Data;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
-/** Runs once a day at the chosen hour, then queues tomorrow's run. */
-public class PrecipNotifyWorker extends Worker {
+/**
+ * The once-a-day notifications: tomorrow's precipitation (evening) and high UV (morning). Each kind
+ * runs at its own chosen hour, then queues its next day's run.
+ */
+public class DailyNotifyWorker extends Worker {
 
+    static final String KIND = "kind";
+    static final String PRECIP = "precip";
+    static final String UV = "uv";
     /** Fetch failures: retry up to this many times (15-min linear backoff), then wait for tomorrow. */
     static final int MAX_RETRIES = 2;
 
-    public PrecipNotifyWorker(@NonNull Context context, @NonNull WorkerParameters params) {
+    public DailyNotifyWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
+    }
+
+    static Data input(String kind) {
+        return new Data.Builder().putString(KIND, kind).build();
     }
 
     @NonNull
     @Override
     public Result doWork() {
         Context ctx = getApplicationContext();
-        if (!PrecipNotifyHelper.isEnabled(ctx)) return Result.success();
+        boolean uv = UV.equals(getInputData().getString(KIND));
+        if (!(uv ? UvNotifyHelper.isEnabled(ctx) : PrecipNotifyHelper.isEnabled(ctx))) return Result.success();
 
-        boolean ok = PrecipNotifyHelper.check(ctx);
+        boolean ok = uv ? UvNotifyHelper.check(ctx) : PrecipNotifyHelper.check(ctx);
         if (!ok && getRunAttemptCount() < MAX_RETRIES) return Result.retry();
 
         // Last statement: REPLACE swaps this finished run for tomorrow's.
-        PrecipNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE);
+        if (uv) UvNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE);
+        else PrecipNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE);
         return Result.success();
     }
 }

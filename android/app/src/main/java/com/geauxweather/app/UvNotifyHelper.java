@@ -82,7 +82,8 @@ public final class UvNotifyHelper {
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
-        OneTimeWorkRequest req = new OneTimeWorkRequest.Builder(UvNotifyWorker.class)
+        OneTimeWorkRequest req = new OneTimeWorkRequest.Builder(DailyNotifyWorker.class)
+                .setInputData(DailyNotifyWorker.input(DailyNotifyWorker.UV))
                 .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
