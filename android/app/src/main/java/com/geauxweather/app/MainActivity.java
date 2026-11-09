@@ -51,6 +51,7 @@ public class MainActivity extends BridgeActivity {
             HurricaneAlertHelper.schedule(this); // the check itself runs in onResume, which always follows
         }
         PrecipNotifyHelper.ensureScheduled(this);
+        WidgetRefreshWorker.ensureScheduled(this);
         captureAlertIntent(getIntent());
         // WebView may not be ready yet — retry shortly
         scheduleDeliverAlert(400);

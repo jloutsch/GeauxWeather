@@ -47,6 +47,7 @@ public class GeauxClockWidgetProvider extends AppWidgetProvider {
         for (int id : appWidgetIds) {
             updateAppWidget(context, appWidgetManager, id);
         }
+        WidgetRefreshWorker.ensureScheduled(context);
     }
 
     @Override
