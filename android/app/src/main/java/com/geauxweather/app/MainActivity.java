@@ -48,8 +48,7 @@ public class MainActivity extends BridgeActivity {
         GeauxWeatherWidgetProvider.refreshAll(this);
         WeatherNotificationHelper.update(this);
         if (HurricaneAlertHelper.isEnabled(this)) {
-            HurricaneAlertHelper.schedule(this);
-            new Thread(() -> HurricaneAlertHelper.check(this, false)).start();
+            HurricaneAlertHelper.schedule(this); // the check itself runs in onResume, which always follows
         }
         PrecipNotifyHelper.ensureScheduled(this);
         captureAlertIntent(getIntent());
