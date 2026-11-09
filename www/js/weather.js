@@ -76,6 +76,7 @@
         'apparent_temperature',
         'precipitation',
         'weather_code',
+        'is_day',
         'cloud_cover',
         'pressure_msl',
         'wind_speed_10m',

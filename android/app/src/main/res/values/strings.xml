@@ -6,4 +6,8 @@
     <string name="custom_url_scheme">com.geauxweather.app</string>
     <string name="widget_name">GeauxWeather</string>
     <string name="widget_description">Current conditions and today\'s high/low</string>
+    <string name="clock_widget_name">GeauxWeather Clock</string>
+    <string name="clock_widget_description">Clock and current weather. Tap the clock for your clock app, tap the weather for GeauxWeather.</string>
+    <string name="clock_picker_title">Tapping the clock opens…</string>
+    <string name="clock_picker_default">System default clock</string>
 </resources>

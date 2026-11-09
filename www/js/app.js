@@ -795,6 +795,7 @@
         temp: Math.round(c.temperature_2m) + '°',
         condition: cond.icon + ' ' + cond.text,
         weatherCode: c.weather_code != null ? c.weather_code : -1,
+        isDay: c.is_day === 0 ? 0 : 1,
         high: d && d.temperature_2m_max ? Math.round(d.temperature_2m_max[0]) + '°' : '—°',
         low: d && d.temperature_2m_min ? Math.round(d.temperature_2m_min[0]) + '°' : '—°',
         units: units,
