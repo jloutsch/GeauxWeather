@@ -32,6 +32,8 @@
 
   const PREF_KEY = 'geauxweather_hurricane_alerts'; // kept for existing installs
   const SEEN_KEY = 'geauxweather_severe_seen';
+  /** Set after the first completed check; an empty seen record alone just means nothing was active. */
+  const CHECKED_KEY = 'geauxweather_severe_checked';
   const LEVEL_KEY = 'geauxweather_alert_level';
   const LOC_KEY = 'geauxweather_location';
   const DEFAULT_KEY = 'geauxweather_default';
@@ -444,9 +446,31 @@
     return false;
   }
 
+  /** The Android plugin, when running in the app; null in a browser. */
+  function nativeAlerts() {
+    const p = global.Capacitor && global.Capacitor.Plugins && global.Capacitor.Plugins.GeauxWeatherNative;
+    return p && typeof p.checkHurricaneAlerts === 'function' ? p : null;
+  }
+
+  /** In the Android app (the plugin's methods may not be attached yet when this script loads). */
+  function inApp() {
+    return !!(global.Capacitor && typeof global.Capacitor.isNativePlatform === 'function' && global.Capacitor.isNativePlatform());
+  }
+
   async function checkNow(opts) {
     opts = opts || {};
     if (!isEnabled() && !opts.force) return { alerts: [] };
+    const native = nativeAlerts();
+    if (native || inApp()) {
+      // In the app, notifications come only from the native check and its seen record;
+      // a second web check with its own record could announce the same warning again (#23).
+      try {
+        if (native) await native.checkHurricaneAlerts({ seedOnly: false });
+      } catch (e) {
+        console.warn('native alert check failed', e);
+      }
+      return { alerts: [], native: true };
+    }
     if (checking) return { alerts: [] };
     checking = true;
     try {
@@ -457,7 +481,8 @@
       }
 
       const seen = loadSeen();
-      const firstRun = Object.keys(seen).length === 0 && !opts.allowSeedNotify;
+      const firstRun =
+        !localStorage.getItem(CHECKED_KEY) && Object.keys(seen).length === 0 && !opts.allowSeedNotify;
 
       let nws = [];
       let tropical = [];
@@ -481,6 +506,7 @@
         keepNws: nwsFailed,
         keepNhc: nhcFailed,
       });
+      localStorage.setItem(CHECKED_KEY, '1');
       if (!firstRun) {
         for (let i = 0; i < alerts.length; i++) {
           await notifyNative(
@@ -490,22 +516,6 @@
             alerts[i].detail || null
           );
         }
-      }
-
-      try {
-        if (
-          global.Capacitor &&
-          global.Capacitor.Plugins &&
-          global.Capacitor.Plugins.GeauxWeatherNative &&
-          typeof global.Capacitor.Plugins.GeauxWeatherNative
-            .checkHurricaneAlerts === 'function'
-        ) {
-          await global.Capacitor.Plugins.GeauxWeatherNative.checkHurricaneAlerts(
-            { seedOnly: firstRun }
-          );
-        }
-      } catch (e) {
-        /* ignore */
       }
 
       return {
@@ -540,7 +550,9 @@
 
   async function setEnabled(on) {
     await syncPreferences(!!on);
-    if (on) {
+    if (on && inApp()) {
+      await checkNow({ force: true }); // native check seeds its own record on first run
+    } else if (on) {
       try {
         await checkNow({ force: true, allowSeedNotify: false });
         // Ensure seed: if first run, checkNow already seeded
@@ -816,7 +828,8 @@
   function init() {
     wireSettings();
     updateHint();
-    if (isEnabled()) {
+    // In the app, MainActivity.onResume and WorkManager run the checks; polling here would add a third.
+    if (isEnabled() && !inApp()) {
       startPolling();
       setTimeout(function () {
         checkNow();

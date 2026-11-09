@@ -28,10 +28,6 @@ import android.os.Build;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
-import androidx.work.Constraints;
-import androidx.work.ExistingPeriodicWorkPolicy;
-import androidx.work.NetworkType;
-import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 
 import org.json.JSONArray;
@@ -43,7 +39,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Severe storm alerts for the user's home/default location:
@@ -66,6 +61,8 @@ public final class HurricaneAlertHelper {
     /** "on" while a storm-type alert/watch or nearby tropical storm is active → check every 15 min. */
     private static final String KEY_FAST = "geauxweather_alert_fast";
     private static final String KEY_PENDING_ALERT = "geauxweather_pending_alert";
+    /** Epoch ms of the last completed check (background or app open), so the shared job can skip one. */
+    private static final String KEY_LAST_CHECK = "geauxweather_alert_last_check";
     public static final String EXTRA_ALERT_JSON = "geauxweather_alert_json";
     public static final String ACTION_OPEN_ALERT = "com.geauxweather.app.OPEN_ALERT";
     private static final String NHC_URL = "https://www.nhc.noaa.gov/CurrentStorms.json";
@@ -91,33 +88,51 @@ public final class HurricaneAlertHelper {
         }
     }
 
+    /**
+     * Alerts run inside the shared background job (WidgetRefreshWorker) so they don't wake the phone
+     * separately: hourly, or every 15 min while a storm is active (see isFast). This also retires the
+     * old alert-only jobs on existing installs.
+     */
     public static void schedule(Context context) {
-        Constraints constraints = new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build();
-        boolean fast = "on".equals(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_FAST, "off"));
-        PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(
-                HurricaneAlertWorker.class,
-                // 15 min (WorkManager's minimum) while storms are active: warnings often last 30–45 min.
-                // Otherwise 60 min to save battery; a watch for the location switches back to 15 min.
-                // shortcut: a warning issued with no prior watch can wait up to ~60 min; upgrade to push alerts if that matters.
-                fast ? 15 : 60,
-                TimeUnit.MINUTES
-        )
-                .setConstraints(constraints)
-                .build();
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                WORK_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
-                req
-        );
-        // Cancel legacy work name if present
+        cancelOldJobs(context);
+        WidgetRefreshWorker.ensureScheduled(context);
+    }
+
+    /** Alerts off: the shared job slows down, or stops if nothing else needs it. */
+    public static void cancelSchedule(Context context) {
+        cancelOldJobs(context);
+        WidgetRefreshWorker.ensureScheduled(context);
+    }
+
+    private static void cancelOldJobs(Context context) {
+        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME);
         WorkManager.getInstance(context).cancelUniqueWork("geauxweather_hurricane_alerts");
     }
 
-    public static void cancelSchedule(Context context) {
-        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME);
-        WorkManager.getInstance(context).cancelUniqueWork("geauxweather_hurricane_alerts");
+    /**
+     * 15-min checks (WorkManager's minimum) while a storm-type alert/watch or nearby tropical storm
+     * is active: warnings often last 30–45 min. Otherwise hourly to save battery.
+     * shortcut: a warning issued with no prior watch can wait up to ~60 min; upgrade to push alerts if that matters.
+     */
+    static boolean isFast(Context context) {
+        return "on".equals(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_FAST, "off"));
+    }
+
+    /**
+     * Only a phone that has never completed a check stays quiet (it would otherwise announce every
+     * alert already in effect). An empty seen record alone is normal after a quiet check, and treating
+     * it as a first run swallowed the first warning after every all-clear.
+     */
+    static boolean isFirstRun(long lastCheckMs, int seenCount) {
+        return lastCheckMs == 0 && seenCount == 0;
+    }
+
+    static long lastCheckMs(Context context) {
+        try {
+            return Long.parseLong(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_LAST_CHECK, "0"));
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     /** @param seedOnly if true, update seen state without notifications */
@@ -137,7 +152,7 @@ public final class HurricaneAlertHelper {
 
         JSONObject prev = loadSeen(prefs);
         JSONObject next = new JSONObject();
-        boolean firstRun = prev.length() == 0;
+        boolean firstRun = isFirstRun(lastCheckMs(context), prev.length());
         boolean quiet = seedOnly || firstRun;
 
         boolean nwsOk = false;
@@ -163,7 +178,10 @@ public final class HurricaneAlertHelper {
             }
         } catch (Exception ignored) {
         }
-        prefs.edit().putString(KEY_SEEN, next.toString()).apply();
+        prefs.edit().putString(KEY_SEEN, next.toString())
+                .putString(KEY_LAST_CHECK, String.valueOf(System.currentTimeMillis())).apply();
+        android.util.Log.i(WidgetRefreshWorker.TAG, "alerts: nws " + (nwsOk ? "ok" : "failed") + ", nhc "
+                + (nhcOk ? "ok" : "failed") + ", " + next.length() + " active" + (quiet ? " (first run, quiet)" : ""));
 
         Boolean fast = nextFastMode(stormActive(next), nwsOk && nhcOk);
         String wanted = fast == null ? null : (fast ? "on" : "off");
@@ -578,7 +596,9 @@ public final class HurricaneAlertHelper {
 
         try {
             NotificationManagerCompat.from(context).notify(id, b.build());
-        } catch (SecurityException ignored) {
+            android.util.Log.i(WidgetRefreshWorker.TAG, "alerts: notified \"" + title + "\"");
+        } catch (SecurityException e) {
+            android.util.Log.w(WidgetRefreshWorker.TAG, "alerts: notification blocked: " + e);
         }
     }
 

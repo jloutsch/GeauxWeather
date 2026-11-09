@@ -55,4 +55,12 @@ public class HurricaneAlertHelperTest {
         assertEquals("hurricane", HurricaneAlertHelper.mapLayerForEvent("Storm Surge Warning"));
         assertEquals("tornado", HurricaneAlertHelper.mapLayerForEvent("Tornado Warning"));
     }
+
+    @Test
+    public void onlyANeverCheckedPhoneIsAQuietFirstRun() {
+        assertTrue(HurricaneAlertHelper.isFirstRun(0, 0));
+        // After a quiet check the seen record is empty; the next warning must still notify
+        assertFalse(HurricaneAlertHelper.isFirstRun(1_794_000_000_000L, 0));
+        assertFalse(HurricaneAlertHelper.isFirstRun(0, 2)); // older install with alerts on record
+    }
 }

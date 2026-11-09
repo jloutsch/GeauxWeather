@@ -34,16 +34,15 @@ public class HurricaneAlertWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
+        // Old alert-only job still queued from an earlier version: do this check, then hand alerts
+        // to the shared background job, which cancels this one.
+        Context ctx = getApplicationContext();
         try {
-            if (!HurricaneAlertHelper.isEnabled(getApplicationContext())) {
-                // Stale schedule (alerts turned off): stop waking every 15 minutes.
-                HurricaneAlertHelper.cancelSchedule(getApplicationContext());
-                return Result.success();
-            }
-            HurricaneAlertHelper.check(getApplicationContext(), false);
-            return Result.success();
-        } catch (Exception e) {
-            return Result.retry();
+            if (HurricaneAlertHelper.isEnabled(ctx)) HurricaneAlertHelper.check(ctx, false);
+        } catch (Exception ignored) {
         }
+        if (HurricaneAlertHelper.isEnabled(ctx)) HurricaneAlertHelper.schedule(ctx);
+        else HurricaneAlertHelper.cancelSchedule(ctx);
+        return Result.success();
     }
 }

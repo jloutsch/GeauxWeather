@@ -25,6 +25,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.util.Log;
 import android.content.pm.PackageManager;
 import android.os.Build;
 
@@ -134,7 +135,10 @@ public final class PrecipNotifyHelper {
                             + "&forecast_days=2&timezone=auto",
                     loc[0], loc[1]);
             String body = HurricaneAlertHelper.httpGet(url, "application/json");
-            if (body == null) return false;
+            if (body == null) {
+                Log.w(WidgetRefreshWorker.TAG, "tomorrow precip: download failed");
+                return false;
+            }
             JSONObject daily = new JSONObject(body).getJSONObject("daily");
             String tomorrow = daily.getJSONArray("time").getString(1);
             if (tomorrow.equals(prefs.getString(KEY_LAST, null))) return true;
@@ -145,6 +149,8 @@ public final class PrecipNotifyHelper {
             int threshold = parseInt(prefs.getString(KEY_THRESHOLD, "70"), 70);
 
             String title = title(prob, snowCm, rainMm, threshold);
+            Log.i(WidgetRefreshWorker.TAG, "tomorrow precip: " + prob + "% (threshold " + threshold + "%)"
+                    + (title == null ? ", no notification" : ", notifying"));
             if (title == null) return true;
             String text = prob + "% chance · " + HurricaneAlertHelper.resolveLocationLabel(prefs);
             if (post(context, title, text)) {
@@ -152,6 +158,7 @@ public final class PrecipNotifyHelper {
             }
             return true;
         } catch (Exception e) {
+            Log.w(WidgetRefreshWorker.TAG, "tomorrow precip: failed: " + e);
             return false;
         }
     }
