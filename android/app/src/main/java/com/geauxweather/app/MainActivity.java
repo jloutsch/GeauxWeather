@@ -50,6 +50,7 @@ public class MainActivity extends BridgeActivity {
         if (HurricaneAlertHelper.isEnabled(this)) {
             HurricaneAlertHelper.schedule(this); // the check itself runs in onResume, which always follows
         }
+        BackgroundJobs.afterInstall(this); // first open after an install: replace jobs queued by the old version
         PrecipNotifyHelper.ensureScheduled(this);
         UvNotifyHelper.ensureScheduled(this);
         WidgetRefreshWorker.ensureScheduled(this);
