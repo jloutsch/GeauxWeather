@@ -88,3 +88,32 @@ test('UV categories follow the WHO bands', () => {
     ['Low', 'Low', 'Moderate', 'High', 'High', 'High', 'Very high', 'Very high', 'Extreme', 'Extreme']
   );
 });
+
+test('moon phase names match well-known moon events', () => {
+  const at = (iso, lat) => W.moonPhase(new Date(iso), lat);
+  // 2024-04-08 total solar eclipse (new moon), 2025-03-14 total lunar eclipse (full moon)
+  assert.equal(at('2024-04-08T18:21:00Z').name, 'New moon');
+  assert.ok(at('2024-04-08T18:21:00Z').illumination <= 2);
+  assert.equal(at('2025-03-14T06:55:00Z').name, 'Full moon');
+  assert.ok(at('2025-03-14T06:55:00Z').illumination >= 98);
+  assert.equal(at('2024-04-15T19:13:00Z').name, 'First quarter');
+  assert.equal(at('2025-03-22T11:29:00Z').name, 'Last quarter');
+  assert.equal(at('2024-04-11T12:00:00Z').name, 'Waxing crescent');
+  assert.equal(at('2025-03-17T12:00:00Z').name, 'Waning gibbous');
+});
+
+test('southern hemisphere sees the lit side mirrored', () => {
+  const crescent = '2024-04-11T12:00:00Z';
+  assert.equal(W.moonPhase(new Date(crescent), 42.5).icon, '🌒');
+  assert.equal(W.moonPhase(new Date(crescent), -33.9).icon, '🌘'); // Sydney
+  assert.equal(W.moonPhase(new Date('2025-03-14T06:55:00Z'), -33.9).icon, '🌕'); // full looks the same
+});
+
+test('moon phase matches the U.S. Naval Observatory for November 2026', () => {
+  // aa.usno.navy.mil/api/moon/phases: new 11-09 07:02, first quarter 11-17 11:48, full 11-24 14:53, last quarter 12-01 06:08 UT
+  const name = (iso) => W.moonPhase(new Date(iso)).name;
+  assert.equal(name('2026-11-09T07:02:00Z'), 'New moon');
+  assert.equal(name('2026-11-17T11:48:00Z'), 'First quarter');
+  assert.equal(name('2026-11-24T14:53:00Z'), 'Full moon');
+  assert.equal(name('2026-12-01T06:08:00Z'), 'Last quarter');
+});

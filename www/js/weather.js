@@ -274,6 +274,34 @@
     return 'cloudy';
   }
 
+  const SYNODIC_DAYS = 29.530588853;
+  /** Julian date of a known new moon (2000-01-06 18:14 UTC). */
+  const NEW_MOON_JD = 2451550.1;
+  const MOON_NAMES = ['New moon', 'Waxing crescent', 'First quarter', 'Waxing gibbous',
+    'Full moon', 'Waning gibbous', 'Last quarter', 'Waning crescent'];
+  const MOON_ICONS = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'];
+
+  /**
+   * Moon phase at a moment, from the mean lunar month: no data source or key needed.
+   * shortcut: the mean month ignores orbit eccentricity, so phase changes can be off by up to about a
+   * day (0.72 days at the 2025-03-22 last quarter); use an ephemeris (e.g. Meeus) if exact phase times
+   * are ever shown.
+   * @param {Date} date
+   * @param {number} [lat] southern-hemisphere viewers see the lit side mirrored, so the icon flips
+   */
+  function moonPhase(date, lat) {
+    const jd = date.getTime() / 86400000 + 2440587.5;
+    const age = (((jd - NEW_MOON_JD) % SYNODIC_DAYS) + SYNODIC_DAYS) % SYNODIC_DAYS;
+    const frac = age / SYNODIC_DAYS;
+    const i = Math.floor(frac * 8 + 0.5) % 8; // eighths centred on new, quarter, full, last quarter
+    return {
+      name: MOON_NAMES[i],
+      icon: MOON_ICONS[lat < 0 ? (8 - i) % 8 : i],
+      illumination: Math.round(((1 - Math.cos(2 * Math.PI * frac)) / 2) * 100),
+      ageDays: age,
+    };
+  }
+
   /** WHO UV categories; `key` matches the AQI tile color classes. */
   function uvLabel(uv) {
     const n = Math.round(Number(uv));
@@ -286,6 +314,7 @@
 
   global.PureSkyWeather = {
     uvLabel: uvLabel,
+    moonPhase: moonPhase,
     fetchForecast: fetchForecast,
     fetchAirQuality: fetchAirQuality,
     usAqiLabel: usAqiLabel,

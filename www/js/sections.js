@@ -26,7 +26,7 @@
   const KEY = 'today_sections';
   /** Default order. `fixed` sections can be hidden but stay where they are. */
   const ITEMS = [
-    { id: 'sun-times', label: 'Sunrise & sunset', fixed: true },
+    { id: 'sun-times', label: 'Sun & moon', fixed: true },
     { id: 'metrics-today', label: 'Details (wind, humidity, AQI…)' },
     { id: 'next-hour', label: 'Next hour rain' },
     { id: 'hourly-section', label: 'Hourly' },

@@ -574,6 +574,11 @@ body.sky-mood-default {
   color: var(--text-muted);
   line-height: 1.25;
 }
+.moon-name {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .sun-value {
   font-size: 1rem;
   font-weight: 600;
