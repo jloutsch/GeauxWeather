@@ -46,7 +46,8 @@
   /** Pin currently dropped on the map (not home until user opens it from Places) */
   let mapPinLoc = null;
   let lastUpdatedAt = null;
-  let units = localStorage.getItem('units') || 'imperial';
+  let units = localStorage.getItem('units') || 'imperial'; // temperature: imperial = °F, metric = °C
+  const U = window.GeauxUnits;
   /** true when home was set from GPS this session / last refresh */
   let homeFromGps = false;
   let searchMode = 'home'; // 'home' | 'addPlace'
@@ -224,8 +225,30 @@
     });
   }
 
+  const unitSelects = document.querySelectorAll('select[data-unit]');
+  function showUnitPrefs() {
+    const u = U.get();
+    unitSelects.forEach(function (sel) {
+      sel.value = u[sel.dataset.unit];
+    });
+  }
+
+  /** Ask Android for its 24-hour switch; redraw if "Automatic" time changed since last launch. */
+  async function syncPhoneClock() {
+    try {
+      const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.GeauxWeatherNative;
+      if (!plugin || !plugin.is24HourFormat) return;
+      const before = U.uses24h();
+      U.setPhone24h((await plugin.is24HourFormat()).value === true);
+      if (U.uses24h() !== before && homeLoc) loadHomeWeather(homeLoc, true);
+    } catch (e) {
+      console.warn('phone clock setting skipped', e);
+    }
+  }
+
   function loadPrefs() {
     if (unitsSelect) unitsSelect.value = units;
+    showUnitPrefs();
     const skyToggle = document.getElementById('sky-bg-toggle');
     if (skyToggle) skyToggle.checked = skyBgEnabled;
     const hurToggle = document.getElementById('hurricane-alerts-toggle');
@@ -247,10 +270,32 @@
     unitsSelect.addEventListener('change', function () {
       units = unitsSelect.value;
       localStorage.setItem('units', units);
+      showUnitPrefs(); // units the user never picked follow °F/°C
       if (homeLoc) loadHomeWeather(homeLoc, true);
       refreshPlacesWeather(true);
     });
   }
+  unitSelects.forEach(function (sel) {
+    sel.addEventListener('change', async function () {
+      U.set(sel.dataset.unit, sel.value);
+      if (sel.dataset.unit === 'clock') {
+        // Clock widget and native notifications read this from Preferences
+        try {
+          const plugins = window.Capacitor && window.Capacitor.Plugins;
+          if (plugins && plugins.Preferences) {
+            await plugins.Preferences.set({ key: 'geauxweather_clock', value: sel.value });
+          }
+          if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.refreshChrome) {
+            await plugins.GeauxWeatherNative.refreshChrome();
+          }
+        } catch (e) {
+          console.warn('clock setting skipped', e);
+        }
+      }
+      if (homeLoc) loadHomeWeather(homeLoc, true);
+      refreshPlacesWeather(true);
+    });
+  });
   const skyBgToggle = document.getElementById('sky-bg-toggle');
   if (skyBgToggle) {
     skyBgToggle.addEventListener('change', function () {
@@ -349,17 +394,13 @@
   function showLastUpdated() {
     if (!lastUpdatedAt) return;
     const t = new Date(lastUpdatedAt);
-    const label = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const label = t.toLocaleTimeString([], U.timeOpts({ hour: 'numeric', minute: '2-digit' }));
     statusEl.textContent = 'Updated ' + label;
   }
 
-  function precipUnitLabel() {
-    return units === 'metric' ? 'mm' : 'in';
-  }
-
   function formatPrecip(val) {
-    if (val == null || Number(val) === 0) return '0 ' + precipUnitLabel();
-    if (units === 'metric') return (Math.round(val * 10) / 10) + ' mm';
+    if (val == null || Number(val) === 0) return '0 ' + U.precipLabel();
+    if (U.isMm()) return (Math.round(val * 10) / 10) + ' mm';
     return (Math.round(val * 100) / 100) + ' in';
   }
 
@@ -367,13 +408,13 @@
   function formatSnow(val, withUnit) {
     const n = Number(val);
     const amount = n < 0.1 ? '<0.1' : String(Math.round(n * 10) / 10);
-    return withUnit ? amount + (units === 'metric' ? ' cm' : ' in') : amount;
+    return withUnit ? amount + ' ' + U.snowLabel() : amount;
   }
 
   function formatTimeISO(iso) {
     if (!iso) return '—';
     try {
-      return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return new Date(iso).toLocaleTimeString([], U.timeOpts({ hour: 'numeric', minute: '2-digit' }));
     } catch (_) {
       return '—';
     }
@@ -494,7 +535,7 @@
     const night = c.is_day != null ? c.is_day === 0 : isNightFromDaily(data);
     const cond = W.codeToCondition(c.weather_code, !night);
     const deg = units === 'metric' ? '°C' : '°F';
-    const windU = units === 'metric' ? 'km/h' : 'mph';
+    const windU = U.windLabel();
 
     setSkyMood(c.weather_code, night);
 
@@ -537,7 +578,7 @@
       { label: 'Precip', value: formatPrecip(c.precipitation) },
       {
         label: 'Pressure',
-        value: c.pressure_msl != null ? Math.round(c.pressure_msl) + ' hPa' : '—',
+        value: U.formatPressure(c.pressure_msl),
       },
     ];
 
@@ -628,7 +669,7 @@
       for (let k = 0; k < 15; k++) {
         const hPct = Math.max(4, Math.round(slot.prob));
         let cls = 'next-hour-bar';
-        if (slot.prob >= 70 || slot.precip >= (units === 'metric' ? 1 : 0.04)) {
+        if (slot.prob >= 70 || slot.precip >= (U.isMm() ? 1 : 0.04)) {
           cls += ' is-heavy';
         } else if (slot.prob >= 30 || slot.precip > 0) {
           cls += ' is-wet';
@@ -643,8 +684,9 @@
           '% chance' +
           (slot.precip > 0
             ? ' · ' +
-              slot.precip.toFixed(units === 'metric' ? 1 : 2) +
-              (units === 'metric' ? ' mm' : ' in')
+              slot.precip.toFixed(U.isMm() ? 1 : 2) +
+              ' ' +
+              U.precipLabel()
             : '');
         html +=
           '<div class="' +
@@ -687,12 +729,7 @@
     for (let i = start; i < end; i++) {
       const t = new Date(h.time[i]);
       // Compact hour labels (avoid wrap under large Android font/display sizes)
-      let label = 'Now';
-      if (i !== start) {
-        const h12 = t.getHours() % 12 || 12;
-        const ap = t.getHours() < 12 ? 'a' : 'p';
-        label = h12 + ap;
-      }
+      const label = i === start ? 'Now' : U.hourLabel(t);
       const cond = W.codeToCondition(h.weather_code[i], !(h.is_day && h.is_day[i] === 0));
       const pop =
         h.precipitation_probability && h.precipitation_probability[i] != null
@@ -729,7 +766,7 @@
           popHtml +
           (anySnow
             ? h.snowfall[i] > 0
-              ? '<div class="hour-snow" title="Snowfall (' + (units === 'metric' ? 'cm' : 'in') + ')">❄' +
+              ? '<div class="hour-snow" title="Snowfall (' + U.snowLabel() + ')">❄' +
                 formatSnow(h.snowfall[i], false) +
                 '</div>'
               : '<div class="hour-snow"></div>'
@@ -759,7 +796,7 @@
           : '—';
       const sunrise = formatTimeISO(d.sunrise ? d.sunrise[i] : null);
       const sunset = formatTimeISO(d.sunset ? d.sunset[i] : null);
-      const windU = units === 'metric' ? 'km/h' : 'mph';
+      const windU = U.windLabel();
       const windMax =
         d.wind_speed_10m_max && d.wind_speed_10m_max[i] != null
           ? Math.round(d.wind_speed_10m_max[i])
@@ -1676,6 +1713,7 @@
 
   async function boot() {
     loadPrefs();
+    syncPhoneClock();
     showScreen('today');
 
     if (window.PureSkyMaps && window.PureSkyMaps.onPinDrop) {
@@ -1744,6 +1782,7 @@
 
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') {
+      syncPhoneClock(); // the phone's 24-hour switch may have changed while away
       refreshIfStale('visible');
       if (window.PureSkyMaps && typeof window.PureSkyMaps.reloadRadar === 'function') {
         window.PureSkyMaps.reloadRadar();

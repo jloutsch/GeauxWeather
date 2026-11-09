@@ -157,10 +157,48 @@
         <h2 class="section-title">Settings</h2>
         <div class="settings-group">
           <label class="setting-row">
-            <span>Units</span>
+            <span>Temperature</span>
             <select id="units">
-              <option value="imperial">°F · mph</option>
-              <option value="metric">°C · km/h</option>
+              <option value="imperial">°F</option>
+              <option value="metric">°C</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>Wind speed</span>
+            <select id="unit-wind" data-unit="wind">
+              <option value="mph">mph</option>
+              <option value="kmh">km/h</option>
+              <option value="ms">m/s</option>
+              <option value="kn">knots</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>Rain &amp; snow</span>
+            <select id="unit-precip" data-unit="precip">
+              <option value="inch">in</option>
+              <option value="mm">mm · cm</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>Pressure</span>
+            <select id="unit-pressure" data-unit="pressure">
+              <option value="hPa">hPa</option>
+              <option value="inHg">inHg</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>Distance</span>
+            <select id="unit-distance" data-unit="distance">
+              <option value="mi">mi</option>
+              <option value="km">km</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>Time</span>
+            <select id="unit-clock" data-unit="clock">
+              <option value="auto">Automatic</option>
+              <option value="12">12-hour</option>
+              <option value="24">24-hour</option>
             </select>
           </label>
           <label class="setting-row">
@@ -296,6 +334,7 @@
 
   <script src="lib/leaflet/leaflet.js"></script>
   <script src="js/location.js"></script>
+  <script src="js/units.js"></script>
   <script src="js/weather.js"></script>
   <script src="js/net.js"></script>
   <script src="js/kmz.js"></script>

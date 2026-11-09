@@ -63,8 +63,9 @@
   async function fetchForecast(lat, lon, units) {
     units = units || 'imperial';
     const tempUnit = units === 'metric' ? 'celsius' : 'fahrenheit';
-    const windUnit = units === 'metric' ? 'kmh' : 'mph';
-    const precipUnit = units === 'metric' ? 'mm' : 'inch';
+    const U = global.GeauxUnits && global.GeauxUnits.get();
+    const windUnit = U ? U.wind : units === 'metric' ? 'kmh' : 'mph';
+    const precipUnit = U ? U.precip : units === 'metric' ? 'mm' : 'inch';
 
     const params = new URLSearchParams({
       latitude: lat,
@@ -189,6 +190,7 @@
   }
 
   function formatVis(meters, units) {
+    if (global.GeauxUnits) return global.GeauxUnits.formatVisibility(meters);
     if (meters == null) return '—';
     if (units === 'metric') {
       return meters >= 1000

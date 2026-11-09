@@ -128,12 +128,19 @@ public final class NextHourNotifyHelper {
             for (int i = 0; s != null && i < times.length; i++) {
                 if (times[i] > nowSec && times[i] - 15 * 60 < nowSec + 60 * 60 && s.optDouble(i, 0) > 0) snow = true;
             }
-            String clock = android.text.format.DateFormat.getTimeFormat(context).format(new Date(start * 1000));
+            String clock = timeFormat(context, prefs.getString("geauxweather_clock", "auto")).format(new Date(start * 1000));
             if (post(context, title(snow, start, nowSec, clock), placeLabel)) {
                 prefs.edit().putString(KEY_LAST, String.valueOf(nowMs)).apply();
             }
         }
         prefs.edit().putString(KEY_WET, (wetSoon || rainingNow) ? "1" : "0").apply();
+    }
+
+    /** App Settings → Time: "12" / "24" force a format; anything else follows the phone. */
+    private static java.text.DateFormat timeFormat(Context context, String pref) {
+        if ("12".equals(pref)) return new java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault());
+        if ("24".equals(pref)) return new java.text.SimpleDateFormat("H:mm", java.util.Locale.getDefault());
+        return android.text.format.DateFormat.getTimeFormat(context);
     }
 
     private static boolean post(Context context, String title, String text) {
