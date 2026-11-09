@@ -38,8 +38,9 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Keeps the widgets and status-bar notification current while the app is closed.
- * The snapshot they draw from is otherwise written only by the web app when it is open.
+ * Keeps the widgets and status-bar notification current while the app is closed, and runs the
+ * next-hour rain/snow check from the same download. The snapshot the widgets draw from is otherwise
+ * written only by the web app when it is open.
  */
 public class WidgetRefreshWorker extends Worker {
     static final String WORK_NAME = "geauxweather_widget_refresh";
@@ -56,17 +57,17 @@ public class WidgetRefreshWorker extends Worker {
     @Override
     public Result doWork() {
         Context ctx = getApplicationContext();
-        if (!hasWidgets(ctx)) {
-            WorkManager.getInstance(ctx).cancelUniqueWork(WORK_NAME); // last widget removed
+        if (!needed(ctx)) {
+            WorkManager.getInstance(ctx).cancelUniqueWork(WORK_NAME); // last widget removed, next-hour check off
             return Result.success();
         }
         refresh(ctx);
         return Result.success(); // a failed fetch waits for the next 30-minute run
     }
 
-    /** Schedules the refresh if any widget is on the home screen. Safe to call repeatedly. */
+    /** Schedules the refresh if a widget is on the home screen or the next-hour check is on. Safe to call repeatedly. */
     static void ensureScheduled(Context context) {
-        if (!hasWidgets(context)) return;
+        if (!needed(context)) return;
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
@@ -76,6 +77,10 @@ public class WidgetRefreshWorker extends Worker {
                 .build();
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, req);
+    }
+
+    static boolean needed(Context context) {
+        return hasWidgets(context) || NextHourNotifyHelper.isEnabled(context);
     }
 
     static boolean hasWidgets(Context context) {
@@ -101,15 +106,18 @@ public class WidgetRefreshWorker extends Worker {
             if (raw != null) prev = new JSONObject(raw);
         } catch (Exception ignored) {
         }
-        if (prev != null && System.currentTimeMillis() - prev.optLong("updatedAt", 0) < FRESH_MS) return true;
+        // The next-hour check needs this run's 15-minute forecast, so it never skips.
+        if (!NextHourNotifyHelper.isEnabled(context) && prev != null
+                && System.currentTimeMillis() - prev.optLong("updatedAt", 0) < FRESH_MS) return true;
         String units = prev != null ? prev.optString("units", "imperial") : "imperial";
 
         try {
             String url = String.format(Locale.US,
                     "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
-                            + "&current=temperature_2m,weather_code,is_day"
+                            + "&current=temperature_2m,weather_code,is_day,precipitation"
                             + "&daily=temperature_2m_max,temperature_2m_min"
-                            + "&forecast_days=1&timezone=auto%s",
+                            + "&minutely_15=precipitation,snowfall&forecast_minutely_15=6"
+                            + "&forecast_days=1&timezone=auto&timeformat=unixtime%s",
                     loc[0], loc[1], "metric".equals(units) ? "" : "&temperature_unit=fahrenheit");
             String body = HurricaneAlertHelper.httpGet(url, "application/json");
             if (body == null) return false;
@@ -120,7 +128,8 @@ public class WidgetRefreshWorker extends Worker {
             int isDay = c.optInt("is_day", 1) == 0 ? 0 : 1;
 
             JSONObject snap = new JSONObject();
-            snap.put("label", HurricaneAlertHelper.resolveLocationLabel(prefs));
+            String label = HurricaneAlertHelper.resolveLocationLabel(prefs);
+            snap.put("label", label);
             snap.put("temp", Math.round(c.getDouble("temperature_2m")) + "°");
             snap.put("condition", condition(code, isDay == 1));
             snap.put("weatherCode", code);
@@ -130,6 +139,7 @@ public class WidgetRefreshWorker extends Worker {
             snap.put("units", units);
             snap.put("updatedAt", System.currentTimeMillis());
             prefs.edit().putString(KEY_WIDGET, snap.toString()).apply();
+            NextHourNotifyHelper.check(context, json, label);
         } catch (Exception e) {
             return false;
         }
