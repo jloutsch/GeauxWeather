@@ -170,13 +170,20 @@
             <span>Severe storm alerts</span>
             <input type="checkbox" id="hurricane-alerts-toggle" />
           </label>
+          <label class="setting-row setting-row-stack">
+            <span>Alert types</span>
+            <select id="alert-level-select">
+              <option value="warnings">Warnings &amp; watches</option>
+              <option value="advisories">Warnings, watches &amp; advisories</option>
+            </select>
+          </label>
           <label class="setting-row">
             <span>Temperature in status bar</span>
             <input type="checkbox" id="status-notif-toggle" checked />
           </label>
         </div>
         <p class="settings-hint muted small" id="hurricane-alerts-hint">
-          Tornado, severe thunderstorm, flash flood &amp; nearby hurricanes for your home or default location. Tap a notification to open the map and alert details.
+          NWS warnings &amp; watches (tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for your home or default location, checked every 15 minutes. Tap a notification to open the map and alert details.
         </p>
         <h2 class="section-title" style="margin-top:4px">Home screen widget</h2>
         <div class="settings-group">

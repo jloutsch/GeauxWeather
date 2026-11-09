@@ -834,6 +834,7 @@ body.sky-mood-default {
   border-radius: 8px;
   padding: 6px 10px;
   font-size: 0.95rem;
+  max-width: 62%;
 }
 
 .setting-row input[type="checkbox"] {
@@ -847,6 +848,10 @@ body.sky-mood-default {
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
+}
+.setting-row-stack select {
+  max-width: none;
+  width: 100%;
 }
 .setting-label-row {
   display: flex;
