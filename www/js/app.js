@@ -294,6 +294,10 @@
   }
 
   function loadPrefs() {
+    // Notification and status-bar rows need the Android app; a browser can't act on them
+    if (!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
+      document.querySelectorAll('.app-only').forEach((el) => el.classList.add('user-hidden'));
+    }
     if (unitsSelect) unitsSelect.value = units;
     renderSectionSettings(S.load());
     showUnitPrefs();
@@ -399,6 +403,38 @@
     precipToggle.addEventListener('change', savePrecip);
     precipThreshold.addEventListener('change', savePrecip);
     precipHour.addEventListener('change', savePrecip);
+  }
+
+  // High UV today: native UvNotifyHelper reads these from Preferences
+  const uvToggle = document.getElementById('uv-notify-toggle');
+  const uvLevel = document.getElementById('uv-level');
+  const uvHour = document.getElementById('uv-hour');
+  if (uvToggle && uvLevel && uvHour) {
+    uvToggle.checked = localStorage.getItem('geauxweather_uv_notify') === 'on';
+    uvLevel.value = localStorage.getItem('geauxweather_uv_level') || '8';
+    uvHour.value = localStorage.getItem('geauxweather_uv_hour') || '8';
+    const saveUv = async function () {
+      const values = {
+        geauxweather_uv_notify: uvToggle.checked ? 'on' : 'off',
+        geauxweather_uv_level: uvLevel.value,
+        geauxweather_uv_hour: uvHour.value,
+      };
+      try {
+        const plugins = window.Capacitor && window.Capacitor.Plugins;
+        for (const key of Object.keys(values)) {
+          localStorage.setItem(key, values[key]);
+          if (plugins && plugins.Preferences) await plugins.Preferences.set({ key: key, value: values[key] });
+        }
+        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.setUvNotify) {
+          await plugins.GeauxWeatherNative.setUvNotify({ enabled: uvToggle.checked });
+        }
+      } catch (e) {
+        console.warn('UV notification settings skipped', e);
+      }
+    };
+    uvToggle.addEventListener('change', saveUv);
+    uvLevel.addEventListener('change', saveUv);
+    uvHour.addEventListener('change', saveUv);
   }
 
   // Rain or snow in the next hour: native NextHourNotifyHelper reads this from Preferences
@@ -637,7 +673,12 @@
         value:
           c.dew_point_2m != null ? Math.round(c.dew_point_2m) + deg : '—',
       },
-      { label: 'UV', value: c.uv_index != null ? String(Math.round(c.uv_index)) : '—' },
+      (function () {
+        if (c.uv_index == null) return { label: 'UV', value: '—' };
+        const band = W.uvLabel(c.uv_index);
+        // Reuses the AQI tile colors: green, yellow, orange, red, violet (WHO UV colors)
+        return { label: 'UV', value: Math.round(c.uv_index) + ' · ' + band.text, aqiKey: band.key };
+      })(),
       { label: 'Visibility', value: W.formatVis(c.visibility, units) },
       { label: 'Precip', value: formatPrecip(c.precipitation) },
       {
