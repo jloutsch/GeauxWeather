@@ -32,3 +32,4 @@ android/*.jks
 geauxweather-release-signing-backup.txt
 .env
 public/js/*.bak
+.gstack/
