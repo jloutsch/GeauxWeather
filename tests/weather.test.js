@@ -81,3 +81,10 @@ test("a model's missing values come from Best match, but its missing days are dr
 test('unknown saved model falls back to Best match', () => {
   assert.equal(W.forecastModel(), 'best_match'); // no localStorage in this sandbox
 });
+
+test('UV categories follow the WHO bands', () => {
+  assert.deepEqual(
+    [0, 2.4, 3, 5.6, 6, 7.4, 8, 10.4, 11, 13].map((v) => W.uvLabel(v).text),
+    ['Low', 'Low', 'Moderate', 'High', 'High', 'High', 'Very high', 'Very high', 'Extreme', 'Extreme']
+  );
+});

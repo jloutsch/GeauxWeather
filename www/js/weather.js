@@ -277,7 +277,18 @@
     return 'cloudy';
   }
 
+  /** WHO UV categories; `key` matches the AQI tile color classes. */
+  function uvLabel(uv) {
+    const n = Math.round(Number(uv));
+    if (n >= 11) return { text: 'Extreme', key: 'very' };
+    if (n >= 8) return { text: 'Very high', key: 'unhealthy' };
+    if (n >= 6) return { text: 'High', key: 'usg' };
+    if (n >= 3) return { text: 'Moderate', key: 'moderate' };
+    return { text: 'Low', key: 'good' };
+  }
+
   global.PureSkyWeather = {
+    uvLabel: uvLabel,
     fetchForecast: fetchForecast,
     fetchAirQuality: fetchAirQuality,
     usAqiLabel: usAqiLabel,

@@ -225,15 +225,15 @@
               <option value="advisories">Warnings, watches &amp; advisories</option>
             </select>
           </label>
-          <label class="setting-row">
+          <label class="setting-row app-only">
             <span>Rain or snow in the next hour</span>
             <input type="checkbox" id="nexthour-notify-toggle" />
           </label>
-          <label class="setting-row">
+          <label class="setting-row app-only">
             <span>Rain or snow tomorrow</span>
             <input type="checkbox" id="precip-notify-toggle" />
           </label>
-          <label class="setting-row">
+          <label class="setting-row app-only">
             <span>When chance is at least</span>
             <select id="precip-threshold">
               <option value="50">50%</option>
@@ -241,7 +241,7 @@
               <option value="90">90%</option>
             </select>
           </label>
-          <label class="setting-row">
+          <label class="setting-row app-only">
             <span>Notify at</span>
             <select id="precip-hour">
               <option value="15">3 PM</option>
@@ -249,7 +249,27 @@
               <option value="21">9 PM</option>
             </select>
           </label>
-          <label class="setting-row">
+          <label class="setting-row app-only">
+            <span>High UV today</span>
+            <input type="checkbox" id="uv-notify-toggle" />
+          </label>
+          <label class="setting-row app-only">
+            <span>When UV reaches</span>
+            <select id="uv-level">
+              <option value="6">6 · High</option>
+              <option value="8" selected>8 · Very high</option>
+              <option value="11">11 · Extreme</option>
+            </select>
+          </label>
+          <label class="setting-row app-only">
+            <span>Notify at</span>
+            <select id="uv-hour">
+              <option value="7">7 AM</option>
+              <option value="8" selected>8 AM</option>
+              <option value="9">9 AM</option>
+            </select>
+          </label>
+          <label class="setting-row app-only">
             <span>Temperature in status bar</span>
             <input type="checkbox" id="status-notif-toggle" checked />
           </label>
