@@ -308,8 +308,35 @@
     );
   }
 
+  /** Settings → Background updates: when the background job last ran, from what it saves natively. */
+  async function showBgStatus() {
+    const el = document.getElementById('bg-status');
+    const prefs = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
+    if (!el || !prefs) return;
+    try {
+      const get = async (k) => (await prefs.get({ key: k })).value;
+      const s = U.bgStatus(
+        Date.now(),
+        Number(await get('geauxweather_bg_last_run')) || 0,
+        Number(await get('geauxweather_bg_interval')) || 0,
+        Number(await get('geauxweather_alert_last_check')) || 0
+      );
+      el.textContent = s.stale
+        ? s.text + ' — Android seems to be pausing it; set GeauxWeather’s battery use to Unrestricted'
+        : s.text;
+      el.classList.toggle('bg-stale', s.stale);
+    } catch (e) {
+      console.warn('background status skipped', e);
+    }
+  }
+  showBgStatus();
+  document.querySelectorAll('[data-screen="settings"]').forEach((b) => b.addEventListener('click', showBgStatus));
+
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') syncPhoneClock(); // 24-hour switch may have changed
+    if (document.visibilityState === 'visible') {
+      syncPhoneClock(); // 24-hour switch may have changed
+      showBgStatus();
+    }
   });
 
   window.GeauxSettingsExtra = {

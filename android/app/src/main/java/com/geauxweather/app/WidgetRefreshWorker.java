@@ -57,6 +57,8 @@ public class WidgetRefreshWorker extends Worker {
     /** Alert checks this close together are skipped (hourly while quiet; runs are 30 min apart). */
     static final long ALERT_GAP_MS = 50 * 60 * 1000L;
     private static final String KEY_INTERVAL = "geauxweather_bg_interval"; // minutes last scheduled
+    /** Epoch ms of the last background run, shown in Settings so the user can see the job is alive. */
+    private static final String KEY_LAST_RUN = "geauxweather_bg_last_run";
     private static final String KEY_MODEL = "geauxweather_model"; // Settings → Forecast model
 
     public WidgetRefreshWorker(@NonNull Context context, @NonNull WorkerParameters params) {
@@ -69,6 +71,8 @@ public class WidgetRefreshWorker extends Worker {
         Context ctx = getApplicationContext();
         ensureScheduled(ctx); // re-times after a widget was removed etc.; cancels if nothing needs it
         if (!needed(ctx)) return Result.success();
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(KEY_LAST_RUN, String.valueOf(System.currentTimeMillis())).apply();
         if (refreshNeeded(ctx)) refresh(ctx);
         boolean alerts = HurricaneAlertHelper.isEnabled(ctx);
         if (alerts && alertDue(System.currentTimeMillis(), HurricaneAlertHelper.lastCheckMs(ctx), HurricaneAlertHelper.isFast(ctx))) {

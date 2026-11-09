@@ -96,3 +96,17 @@ test('automatic follows the phone 24-hour switch; an explicit choice wins', () =
   U.set('clock', '24');
   assert.equal(U.hourLabel(afternoon), '15');
 });
+
+test('background status: off, not yet run, normal and stale', () => {
+  const { U } = load({ unit_clock: '24' });
+  const now = new Date(2026, 10, 10, 7, 0).getTime();
+  const min = 60000;
+  assert.equal(U.bgStatus(now, 0, 0, 0).text, 'Off (no widget, next-hour or alert checks)');
+  assert.equal(U.bgStatus(now, 0, 30, 0).text, 'not run yet · every 30 min');
+  const ok = U.bgStatus(now, now - 12 * min, 30, now - 40 * min);
+  assert.equal(ok.text, 'last ran 06:48 · every 30 min · alerts checked 06:20');
+  assert.equal(ok.stale, false);
+  assert.equal(U.bgStatus(now, now - 75 * min, 30, 0).stale, false); // 2 × 30 + 15 = 75 min allowed
+  assert.equal(U.bgStatus(now, now - 76 * min, 30, 0).stale, true);
+  assert.match(U.bgStatus(now, now - 10 * 60 * min, 30, 0).text, /last ran \S+ 21:00/); // yesterday shows the weekday
+});
