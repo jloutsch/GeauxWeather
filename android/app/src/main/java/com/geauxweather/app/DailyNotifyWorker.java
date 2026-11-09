@@ -36,7 +36,7 @@ import androidx.work.WorkerParameters;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The once-a-day notifications: tomorrow's precipitation (evening) and high UV (morning). Each kind
+ * The once-a-day notifications: tomorrow's precipitation (evening), high UV, poor air and the daily summary (morning). Each kind
  * runs at its own chosen hour, then queues its next day's run.
  */
 public class DailyNotifyWorker extends Worker {
@@ -45,6 +45,7 @@ public class DailyNotifyWorker extends Worker {
     static final String PRECIP = "precip";
     static final String UV = "uv";
     static final String AQI = "aqi";
+    static final String SUMMARY = "summary";
     /** Fetch failures: retry up to this many times (15-min linear backoff), then wait for tomorrow. */
     static final int MAX_RETRIES = 2;
 
@@ -83,18 +84,21 @@ public class DailyNotifyWorker extends Worker {
     private static boolean isEnabled(Context ctx, String kind) {
         if (UV.equals(kind)) return UvNotifyHelper.isEnabled(ctx);
         if (AQI.equals(kind)) return AqiNotifyHelper.isEnabled(ctx);
+        if (SUMMARY.equals(kind)) return SummaryNotifyHelper.isEnabled(ctx);
         return PrecipNotifyHelper.isEnabled(ctx);
     }
 
     private static boolean check(Context ctx, String kind) {
         if (UV.equals(kind)) return UvNotifyHelper.check(ctx);
         if (AQI.equals(kind)) return AqiNotifyHelper.check(ctx);
+        if (SUMMARY.equals(kind)) return SummaryNotifyHelper.check(ctx);
         return PrecipNotifyHelper.check(ctx);
     }
 
     private static Operation scheduleNext(Context ctx, String kind) {
         if (UV.equals(kind)) return UvNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE);
         if (AQI.equals(kind)) return AqiNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE);
+        if (SUMMARY.equals(kind)) return SummaryNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE);
         return PrecipNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE);
     }
 

@@ -57,6 +57,7 @@ public class MainActivity extends BridgeActivity {
         PrecipNotifyHelper.ensureScheduled(this);
         UvNotifyHelper.ensureScheduled(this);
         AqiNotifyHelper.ensureScheduled(this);
+        SummaryNotifyHelper.ensureScheduled(this);
         WidgetRefreshWorker.ensureScheduled(this);
         captureAlertIntent(getIntent());
         // WebView may not be ready yet — retry shortly

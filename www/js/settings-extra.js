@@ -135,23 +135,24 @@
   });
 
   /**
-   * The once-a-day notifications (tomorrow's precipitation, UV, air quality) share one shape: a switch, a
-   * level and an hour, saved to localStorage and Preferences (native reads them), then the plugin
-   * re-queues or cancels the daily check.
+   * The once-a-day notifications (tomorrow's precipitation, UV, air quality, summary) share one shape: a
+   * switch, a level (none for the summary: null id and key) and an hour, saved to localStorage and
+   * Preferences (native reads them), then the plugin re-queues or cancels the daily check.
    */
   function wireDaily(ids, keys, defaults, method, label) {
     const toggle = document.getElementById(ids[0]);
-    const level = document.getElementById(ids[1]);
+    const level = ids[1] && document.getElementById(ids[1]);
     const hour = document.getElementById(ids[2]);
-    if (!toggle || !level || !hour) return;
+    if (!toggle || (ids[1] && !level) || !hour) return;
     toggle.checked = localStorage.getItem(keys[0]) === 'on';
-    level.value = localStorage.getItem(keys[1]) || defaults[0];
+    if (level) level.value = localStorage.getItem(keys[1]) || defaults[0];
     hour.value = localStorage.getItem(keys[2]) || defaults[1];
     const save = async function () {
-      const values = [toggle.checked ? 'on' : 'off', level.value, hour.value];
+      const values = [toggle.checked ? 'on' : 'off', level && level.value, hour.value];
       try {
         const plugins = window.Capacitor && window.Capacitor.Plugins;
         for (let i = 0; i < keys.length; i++) {
+          if (!keys[i]) continue;
           localStorage.setItem(keys[i], values[i]);
           if (plugins && plugins.Preferences) await plugins.Preferences.set({ key: keys[i], value: values[i] });
         }
@@ -163,7 +164,7 @@
         console.warn(label + ' notification settings skipped', e);
       }
     };
-    [toggle, level, hour].forEach((el) => el.addEventListener('change', save));
+    [toggle, level, hour].forEach((el) => el && el.addEventListener('change', save));
   }
 
   wireDaily(
@@ -186,6 +187,13 @@
     ['1', '8'],
     'setAqiNotify',
     'air quality'
+  );
+  wireDaily(
+    ['summary-notify-toggle', null, 'summary-hour'],
+    ['geauxweather_summary_notify', null, 'geauxweather_summary_hour'],
+    [null, '7'],
+    'setSummaryNotify',
+    'summary'
   );
 
   /** AQI levels read in the scale the app shows: US AQI for °F, European AQI for °C. */
@@ -262,6 +270,8 @@
     ['geauxweather_aqi_notify', 'geauxweather_aqi_notify', 'aqi-notify-toggle'],
     ['geauxweather_aqi_level', 'geauxweather_aqi_level', 'aqi-level'],
     ['geauxweather_aqi_hour', 'geauxweather_aqi_hour', 'aqi-hour'],
+    ['geauxweather_summary_notify', 'geauxweather_summary_notify', 'summary-notify-toggle'],
+    ['geauxweather_summary_hour', 'geauxweather_summary_hour', 'summary-hour'],
     ['geauxweather_status_notification', 'geauxweather_status_notification', 'status-notif-toggle'],
     ['geauxweather_model', 'forecast_model', 'forecast-model'],
     ['geauxweather_clock', 'unit_clock', 'unit-clock'],
