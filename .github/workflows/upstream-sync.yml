@@ -1,6 +1,7 @@
 # When tunefriend/GeauxWeather publishes a new release, merge it into this fork:
 #  - clean merge  → push sync/upstream-<tag>, open a PR into main, start CI on it (its result shows on
-#                   the PR as the "CI (sync branch)" status).
+#                   the PR as the "CI (sync branch)" status). Later runs add to that branch, never
+#                   force-push it; a sync PR closed without merging marks that release as skipped.
 #                   CI failing on that PR means upstream broke one of this fork's features.
 #  - conflicts    → open an issue listing the conflicting files (resolve by hand).
 #  - push refused → open an issue (GitHub may refuse workflow-file changes pushed with the Actions token).
@@ -73,11 +74,35 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
           branch="sync/upstream-${name//\//-}"
-          git switch -c "$branch"
 
-          # Opens an issue with this title and body unless an open one with the title exists
+          # A sync PR for this upstream commit was closed without merging: the release was skipped on purpose
+          for n in $(gh pr list --head "$branch" --state closed --json number,mergedAt -q '.[]|select(.mergedAt==null)|.number'); do
+            git fetch -q origin "refs/pull/$n/head"
+            if git merge-base --is-ancestor "$target" FETCH_HEAD; then
+              echo "PR #$n for $name was closed without merging; leaving it skipped."
+              exit 0
+            fi
+          done
+
+          # Build on an existing sync branch, never force-push it: fixes pushed to the sync PR by hand stay
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            git fetch -q origin "$branch"
+            git switch -c "$branch" FETCH_HEAD
+            if git merge-base --is-ancestor "$target" HEAD; then
+              echo "$branch already contains $name; nothing to do."
+              exit 0
+            fi
+          else
+            git switch -c "$branch"
+          fi
+
+          # Opens an issue unless one with exactly this title exists, open or closed (closed = handled or skipped)
           report() {
-            if [ -z "$(gh issue list --state open --search "\"$1\" in:title" --json number -q '.[].number')" ]; then
+            local titles
+            titles=$(gh issue list --state all --search "\"$1\" in:title" --json title -q '.[].title')
+            if grep -qFx -- "$1" <<< "$titles"; then
+              echo "An issue titled \"$1\" already exists; not opening another."
+            else
               gh issue create --title "$1" --body "$2"
             fi
           }
@@ -86,13 +111,13 @@ jobs:
           fix_locally="$(printf '```\ngit fetch https://github.com/%s.git %s\ngit switch -c %s main\ngit merge FETCH_HEAD\n# fix conflicts, run npm test and ./gradlew testDebugUnitTest, then open a PR\n```' "$UPSTREAM" "$name" "$branch")"
 
           if git merge --no-edit -m "Merge upstream $name" "$target"; then
-            if ! git push --force origin "$branch" 2> push.err; then
+            if ! git push origin "$branch" 2> push.err; then
               cat push.err
               # shellcheck disable=SC2016
               report "Upstream $name needs a manual merge" "$(printf '[%s](%s) merges cleanly, but the sync job could not push it:\n\n```\n%s\n```\n\nGitHub can refuse changes to `.github/workflows/` pushed with the Actions token. Merge it locally and push with your own credentials:\n%s' "$name" "$link" "$(cat push.err)" "$fix_locally")"
               exit 0
             fi
-            if ! gh pr view "$branch" --json number >/dev/null 2>&1; then
+            if [ -z "$(gh pr list --head "$branch" --state open --json number -q '.[].number')" ]; then
               gh pr create --base main --head "$branch" \
                 --title "Sync upstream $name" \
                 --body "Merges upstream [$name]($link) into this fork. CI runs on this branch; a failure means upstream changed something one of this fork's features or tests depend on."
