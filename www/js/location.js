@@ -323,6 +323,7 @@
       temp: loc.temp != null ? loc.temp : prev ? prev.temp : null,
       condition: loc.condition || (prev && prev.condition) || null,
       weatherCode: loc.weatherCode != null ? loc.weatherCode : prev ? prev.weatherCode : null,
+      isDay: loc.isDay != null ? loc.isDay : prev ? prev.isDay : null,
       weatherAt: loc.weatherAt || (prev && prev.weatherAt) || null,
     };
     list = list.filter(function (p) {
@@ -346,6 +347,7 @@
         temp: snap.temp,
         condition: snap.condition,
         weatherCode: snap.weatherCode,
+        isDay: snap.isDay,
         weatherAt: Date.now(),
         label: snap.label || p.label,
       });

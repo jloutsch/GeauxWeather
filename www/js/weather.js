@@ -88,6 +88,7 @@
         'temperature_2m',
         'precipitation_probability',
         'weather_code',
+        'is_day',
         'wind_speed_10m',
         'wind_direction_10m',
       ].join(','),
@@ -130,7 +131,29 @@
     return data;
   }
 
-  function codeToCondition(code) {
+  /** Night icons for codes whose day icon shows a sun. */
+  const NIGHT_ICONS = {
+    0: '🌙',
+    1: '🌙',
+    2: '☁️',
+    51: '🌧',
+    53: '🌧',
+    80: '🌧',
+  };
+
+  /**
+   * @param {number} code WMO weather code
+   * @param {boolean} [isDay] false → night icon; omitted or true → day icon
+   */
+  function codeToCondition(code, isDay) {
+    const cond = dayCondition(code);
+    if (isDay === false && NIGHT_ICONS[code]) {
+      return { text: cond.text, icon: NIGHT_ICONS[code] };
+    }
+    return cond;
+  }
+
+  function dayCondition(code) {
     const map = {
       0: { text: 'Clear', icon: '☀️' },
       1: { text: 'Mainly clear', icon: '🌤' },

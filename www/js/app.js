@@ -325,6 +325,7 @@
       temp: Math.round(c.temperature_2m),
       condition: cond.text,
       weatherCode: c.weather_code,
+      isDay: c.is_day != null ? c.is_day : null,
       label: (loc && loc.label) || null,
       weatherAt: Date.now(),
     };
@@ -429,11 +430,11 @@
 
   function renderCurrent(data) {
     const c = data.current;
-    const cond = W.codeToCondition(c.weather_code);
+    const night = c.is_day != null ? c.is_day === 0 : isNightFromDaily(data);
+    const cond = W.codeToCondition(c.weather_code, !night);
     const deg = units === 'metric' ? '°C' : '°F';
     const windU = units === 'metric' ? 'km/h' : 'mph';
 
-    const night = isNightFromDaily(data);
     setSkyMood(c.weather_code, night);
 
     const t = Math.round(c.temperature_2m);
@@ -627,7 +628,7 @@
         const ap = t.getHours() < 12 ? 'a' : 'p';
         label = h12 + ap;
       }
-      const cond = W.codeToCondition(h.weather_code[i]);
+      const cond = W.codeToCondition(h.weather_code[i], !(h.is_day && h.is_day[i] === 0));
       const pop =
         h.precipitation_probability && h.precipitation_probability[i] != null
           ? h.precipitation_probability[i]
@@ -789,7 +790,7 @@
     try {
       const c = data.current;
       const d = data.daily;
-      const cond = W.codeToCondition(c.weather_code);
+      const cond = W.codeToCondition(c.weather_code, c.is_day !== 0);
       const payload = JSON.stringify({
         label: (loc && loc.label) || 'GeauxWeather',
         temp: Math.round(c.temperature_2m) + '°',
@@ -1138,7 +1139,7 @@
         ? W.codeToCondition(p.weatherCode).text
         : '—';
     const icon =
-      p.weatherCode != null ? W.codeToCondition(p.weatherCode).icon : '📍';
+      p.weatherCode != null ? W.codeToCondition(p.weatherCode, p.isDay !== 0).icon : '📍';
     const temp = p.temp != null ? p.temp + '°' : '—°';
     const defBadge = p.isDefault
       ? '<span class="place-badge">Default</span>'
@@ -1334,6 +1335,7 @@
           temp: snap.temp,
           condition: snap.condition,
           weatherCode: snap.weatherCode,
+          isDay: snap.isDay,
           weatherAt: snap.weatherAt,
         });
         setStatus('Added ' + (place.label || place.name), 2500);
