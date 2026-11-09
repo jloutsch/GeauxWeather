@@ -259,6 +259,39 @@
       setSkyMood(lastWeatherCode, lastIsNight);
     });
   }
+  // Precipitation (rain or snow) tomorrow: native PrecipNotifyHelper reads these from Preferences
+  const precipToggle = document.getElementById('precip-notify-toggle');
+  const precipThreshold = document.getElementById('precip-threshold');
+  const precipHour = document.getElementById('precip-hour');
+  if (precipToggle && precipThreshold && precipHour) {
+    precipToggle.checked = localStorage.getItem('geauxweather_precip_notify') === 'on';
+    precipThreshold.value = localStorage.getItem('geauxweather_precip_threshold') || '70';
+    precipHour.value = localStorage.getItem('geauxweather_precip_hour') || '18';
+    const savePrecip = async function () {
+      const values = {
+        geauxweather_precip_notify: precipToggle.checked ? 'on' : 'off',
+        geauxweather_precip_threshold: precipThreshold.value,
+        geauxweather_precip_hour: precipHour.value,
+      };
+      try {
+        const plugins = window.Capacitor && window.Capacitor.Plugins;
+        for (const key of Object.keys(values)) {
+          localStorage.setItem(key, values[key]);
+          if (plugins && plugins.Preferences) await plugins.Preferences.set({ key: key, value: values[key] });
+        }
+        // Reschedules the once-a-day check for the new time (or cancels it)
+        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.setPrecipNotify) {
+          await plugins.GeauxWeatherNative.setPrecipNotify({ enabled: precipToggle.checked });
+        }
+      } catch (e) {
+        console.warn('precipitation notification settings skipped', e);
+      }
+    };
+    precipToggle.addEventListener('change', savePrecip);
+    precipThreshold.addEventListener('change', savePrecip);
+    precipHour.addEventListener('change', savePrecip);
+  }
+
   const statusNotifToggle = document.getElementById('status-notif-toggle');
   if (statusNotifToggle) {
     statusNotifToggle.addEventListener('change', async function () {

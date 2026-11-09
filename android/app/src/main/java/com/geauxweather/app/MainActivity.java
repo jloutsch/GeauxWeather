@@ -37,6 +37,7 @@ import org.json.JSONObject;
 public class MainActivity extends BridgeActivity {
     private static final int REQ_POST_NOTIFICATIONS = 1001;
     private String pendingAlertJson = null;
+    private String pendingScreen = null;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -50,10 +51,13 @@ public class MainActivity extends BridgeActivity {
             HurricaneAlertHelper.schedule(this);
             new Thread(() -> HurricaneAlertHelper.check(this, false)).start();
         }
+        PrecipNotifyHelper.ensureScheduled(this);
         captureAlertIntent(getIntent());
         // WebView may not be ready yet — retry shortly
         scheduleDeliverAlert(400);
         scheduleDeliverAlert(1200);
+        scheduleOpenScreen(600);
+        scheduleOpenScreen(1500);
     }
 
     @Override
@@ -62,6 +66,7 @@ public class MainActivity extends BridgeActivity {
         setIntent(intent);
         captureAlertIntent(intent);
         scheduleDeliverAlert(200);
+        scheduleOpenScreen(200);
     }
 
     @Override
@@ -95,6 +100,23 @@ public class MainActivity extends BridgeActivity {
             // Consume so rotation / relaunch doesn't re-open forever
             intent.removeExtra(HurricaneAlertHelper.EXTRA_ALERT_JSON);
         }
+        // Precipitation notification → open the 10-day screen (only that screen is accepted)
+        if ("10day".equals(intent.getStringExtra(PrecipNotifyHelper.EXTRA_OPEN_SCREEN))) {
+            pendingScreen = "10day";
+            intent.removeExtra(PrecipNotifyHelper.EXTRA_OPEN_SCREEN);
+        }
+    }
+
+    private void scheduleOpenScreen(long delayMs) {
+        if (pendingScreen == null) return;
+        new android.os.Handler(getMainLooper()).postDelayed(() -> {
+            if (pendingScreen == null || getBridge() == null || getBridge().getWebView() == null) return;
+            getBridge().getWebView().evaluateJavascript(
+                    "(function(){if(typeof window.__geauxShowScreen==='function'){window.__geauxShowScreen('10day');return true;}return false;})()",
+                    result -> {
+                        if ("true".equals(result)) pendingScreen = null;
+                    });
+        }, delayMs);
     }
 
     private void scheduleDeliverAlert(long delayMs) {

@@ -178,6 +178,26 @@
             </select>
           </label>
           <label class="setting-row">
+            <span>Rain or snow tomorrow</span>
+            <input type="checkbox" id="precip-notify-toggle" />
+          </label>
+          <label class="setting-row">
+            <span>When chance is at least</span>
+            <select id="precip-threshold">
+              <option value="50">50%</option>
+              <option value="70" selected>70%</option>
+              <option value="90">90%</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>Notify at</span>
+            <select id="precip-hour">
+              <option value="15">3 PM</option>
+              <option value="18" selected>6 PM</option>
+              <option value="21">9 PM</option>
+            </select>
+          </label>
+          <label class="setting-row">
             <span>Temperature in status bar</span>
             <input type="checkbox" id="status-notif-toggle" checked />
           </label>

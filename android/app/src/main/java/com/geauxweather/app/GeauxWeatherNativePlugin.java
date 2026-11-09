@@ -63,6 +63,17 @@ public class GeauxWeatherNativePlugin extends Plugin {
         }
     }
 
+    /** Precipitation notification: switch on/off; also call after threshold/time changes to reschedule. */
+    @PluginMethod
+    public void setPrecipNotify(PluginCall call) {
+        try {
+            PrecipNotifyHelper.setEnabled(getContext(), call.getBoolean("enabled", false));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("setPrecipNotify failed: " + e.getMessage());
+        }
+    }
+
     @PluginMethod
     public void checkHurricaneAlerts(PluginCall call) {
         try {
