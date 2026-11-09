@@ -49,6 +49,7 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         for (int id : appWidgetIds) {
             updateAppWidget(context, appWidgetManager, id);
         }
+        WidgetRefreshWorker.ensureScheduled(context);
     }
 
     public static void refreshAll(Context context) {
