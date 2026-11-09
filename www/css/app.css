@@ -860,6 +860,129 @@ body.sky-mood-default {
   max-width: 62%;
 }
 
+/* Settings dropdowns (select-menu.js): the native <select> stays hidden as the source of truth */
+.gw-native-select {
+  display: none !important;
+}
+
+.gw-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 62%;
+  min-height: 2.25rem;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.setting-row-stack .gw-select {
+  max-width: none;
+  width: 100%;
+}
+
+.gw-select-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gw-select-chevron {
+  width: 12px;
+  height: 8px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.gw-select[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.gw-select[aria-expanded="true"] .gw-select-chevron {
+  transform: rotate(180deg);
+}
+
+.gw-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.gw-menu {
+  position: fixed;
+  z-index: 1001;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  background: #1c2430; /* opaque: --surface-2 is see-through on the sky backgrounds */
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  animation: gw-menu-in 0.12s ease-out;
+}
+
+@keyframes gw-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-menu {
+    animation: none;
+  }
+}
+
+.gw-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.gw-option:hover,
+.gw-option:focus {
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.gw-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.gw-option-text {
+  flex: 1;
+}
+
+.gw-option-check {
+  visibility: hidden;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.gw-option[aria-selected="true"] {
+  color: var(--accent);
+}
+
+.gw-option[aria-selected="true"] .gw-option-check {
+  visibility: visible;
+}
+
 .setting-row input[type="checkbox"] {
   width: 20px;
   height: 20px;

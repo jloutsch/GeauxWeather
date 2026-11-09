@@ -27,6 +27,7 @@ import android.os.Bundle;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -62,7 +63,29 @@ public class MainActivity extends BridgeActivity {
         scheduleDeliverAlert(1200);
         scheduleOpenScreen(600);
         scheduleOpenScreen(1500);
+        getOnBackPressedDispatcher().addCallback(this, backCallback);
     }
+
+    /** Back closes an open settings menu (select-menu.js) first; otherwise it does what it always did. */
+    private final OnBackPressedCallback backCallback = new OnBackPressedCallback(true) {
+        @Override
+        public void handleOnBackPressed() {
+            WebView wv = getBridge() != null ? getBridge().getWebView() : null;
+            if (wv == null) {
+                defaultBack();
+                return;
+            }
+            wv.evaluateJavascript("(function(){return !!(window.__geauxBack && window.__geauxBack());})()", result -> {
+                if (!"true".equals(result)) defaultBack();
+            });
+        }
+
+        private void defaultBack() {
+            setEnabled(false);
+            getOnBackPressedDispatcher().onBackPressed();
+            setEnabled(true);
+        }
+    };
 
     @Override
     public void onNewIntent(Intent intent) {
