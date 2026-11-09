@@ -151,6 +151,18 @@ public final class HurricaneAlertHelper {
         } catch (Exception ignored) {
         }
 
+        // A failed feed keeps its previous entries; otherwise the next run would re-notify them, or
+        // (record emptied) count as a quiet "first run" and silently swallow a new warning.
+        try {
+            java.util.Iterator<String> keys = prev.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                if ((!nwsOk && key.startsWith("nws:")) || (!nhcOk && key.startsWith("nhc:"))) {
+                    next.put(key, prev.get(key));
+                }
+            }
+        } catch (Exception ignored) {
+        }
         prefs.edit().putString(KEY_SEEN, next.toString()).apply();
 
         Boolean fast = nextFastMode(stormActive(next), nwsOk && nhcOk);

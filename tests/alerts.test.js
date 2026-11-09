@@ -104,3 +104,14 @@ test('a failed NWS request leaves the current alert list on screen', async () =>
   await sandbox.window.PureSkyHurricaneAlerts.renderActiveList();
   assert.equal(list.innerHTML, 'Tornado Warning');
 });
+
+test('a failed NWS check keeps the seen record, so the next check neither re-notifies nor goes quiet', () => {
+  const key = 'nws:urn:active:1';
+  let saved = null;
+  const B = loadAlerts({
+    getItem: (k) => (k === 'geauxweather_severe_seen' ? JSON.stringify({ [key]: { event: 'Tornado Warning', headline: '' } }) : null),
+    setItem: (k, v) => { if (k === 'geauxweather_severe_seen') saved = JSON.parse(v); },
+  });
+  B.diffAndCollect({ lat: 35, lon: -97, label: 'Moore' }, [], [], { keepNws: true });
+  assert.ok(saved && saved[key], 'seen record lost the active warning after a failed request');
+});
