@@ -50,7 +50,9 @@ public class MainActivity extends BridgeActivity {
         if (HurricaneAlertHelper.isEnabled(this)) {
             HurricaneAlertHelper.schedule(this); // the check itself runs in onResume, which always follows
         }
-        BackgroundJobs.afterInstall(this); // first open after an install: replace jobs queued by the old version
+        // First open after an install: replace jobs queued by the old version (waits on WorkManager, so off the main thread)
+        final android.content.Context app = getApplicationContext();
+        new Thread(() -> BackgroundJobs.afterInstall(app)).start();
         PrecipNotifyHelper.ensureScheduled(this);
         UvNotifyHelper.ensureScheduled(this);
         WidgetRefreshWorker.ensureScheduled(this);

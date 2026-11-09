@@ -28,6 +28,7 @@ import androidx.annotation.NonNull;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
+import androidx.work.Operation;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.Worker;
@@ -93,13 +94,12 @@ public class WidgetRefreshWorker extends Worker {
      * Starts, re-times or stops the job to match what is switched on. Safe to call repeatedly: an unchanged
      * interval keeps the existing schedule (KEEP); a changed one updates it in place (UPDATE).
      */
-    static void ensureScheduled(Context context) {
+    static Operation ensureScheduled(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         WorkManager wm = WorkManager.getInstance(context);
         if (!needed(context)) {
-            wm.cancelUniqueWork(WORK_NAME);
             prefs.edit().remove(KEY_INTERVAL).apply();
-            return;
+            return wm.cancelUniqueWork(WORK_NAME);
         }
         int minutes = intervalMinutes(HurricaneAlertHelper.isEnabled(context), HurricaneAlertHelper.isFast(context),
                 refreshNeeded(context));
@@ -111,12 +111,13 @@ public class WidgetRefreshWorker extends Worker {
                 WidgetRefreshWorker.class, minutes, TimeUnit.MINUTES)
                 .setConstraints(constraints)
                 .build();
-        wm.enqueueUniquePeriodicWork(WORK_NAME,
+        Operation op = wm.enqueueUniquePeriodicWork(WORK_NAME,
                 changed ? ExistingPeriodicWorkPolicy.UPDATE : ExistingPeriodicWorkPolicy.KEEP, req);
         if (changed) {
             prefs.edit().putString(KEY_INTERVAL, String.valueOf(minutes)).apply();
             Log.i(TAG, "background job every " + minutes + " min");
         }
+        return op;
     }
 
     static boolean needed(Context context) {

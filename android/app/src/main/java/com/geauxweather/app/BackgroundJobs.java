@@ -23,6 +23,12 @@ import android.content.SharedPreferences;
 import android.util.Log;
 
 import androidx.work.ExistingWorkPolicy;
+import androidx.work.Operation;
+import androidx.work.WorkManager;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Re-queues every background job with this version's worker classes, so jobs queued by an older
@@ -36,15 +42,26 @@ final class BackgroundJobs {
 
     private BackgroundJobs() {}
 
+    /**
+     * Blocks until WorkManager has stored every change (call off the main thread): after an update
+     * the app may run only for its broadcast, and Android can kill it within a second, which lost an
+     * un-awaited REPLACE on the S23. The install is marked done only after all of it is stored.
+     */
     static void rescheduleAll(Context context) {
-        if (HurricaneAlertHelper.isEnabled(context)) {
-            HurricaneAlertHelper.schedule(context); // cancels the old alert-only job, starts the shared one
-        } else {
-            WidgetRefreshWorker.ensureScheduled(context);
+        WorkManager wm = WorkManager.getInstance(context);
+        List<Operation> ops = new ArrayList<>();
+        ops.add(wm.cancelUniqueWork(HurricaneAlertHelper.WORK_NAME)); // pre-#25 alert-only jobs
+        ops.add(wm.cancelUniqueWork("geauxweather_hurricane_alerts"));
+        ops.add(WidgetRefreshWorker.ensureScheduled(context)); // also runs the alert checks
+        if (PrecipNotifyHelper.isEnabled(context)) ops.add(PrecipNotifyHelper.scheduleNext(context, ExistingWorkPolicy.REPLACE));
+        if (UvNotifyHelper.isEnabled(context)) ops.add(UvNotifyHelper.scheduleNext(context, ExistingWorkPolicy.REPLACE));
+        try {
+            for (Operation op : ops) op.getResult().get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            Log.w(WidgetRefreshWorker.TAG, "background jobs not all re-queued; will retry on next open: " + e);
+            return;
         }
-        if (PrecipNotifyHelper.isEnabled(context)) PrecipNotifyHelper.scheduleNext(context, ExistingWorkPolicy.REPLACE);
-        if (UvNotifyHelper.isEnabled(context)) UvNotifyHelper.scheduleNext(context, ExistingWorkPolicy.REPLACE);
-        prefs(context).edit().putString(KEY_INSTALL, String.valueOf(installTime(context))).apply();
+        prefs(context).edit().putString(KEY_INSTALL, String.valueOf(installTime(context))).commit();
         Log.i(WidgetRefreshWorker.TAG, "background jobs re-queued for this install");
     }
 

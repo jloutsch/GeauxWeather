@@ -28,6 +28,7 @@ import androidx.work.Constraints;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
+import androidx.work.Operation;
 import androidx.work.WorkManager;
 
 import org.json.JSONObject;
@@ -76,7 +77,7 @@ public final class UvNotifyHelper {
     }
 
     /** One wake and one small request per day, re-queued after each run (see PrecipNotifyHelper). */
-    static void scheduleNext(Context context, ExistingWorkPolicy policy) {
+    static Operation scheduleNext(Context context, ExistingWorkPolicy policy) {
         int hour = parseInt(prefs(context).getString(KEY_HOUR, "8"), 8);
         long delayMs = PrecipNotifyHelper.millisUntilNext(System.currentTimeMillis(), hour);
         Constraints constraints = new Constraints.Builder()
@@ -88,7 +89,7 @@ public final class UvNotifyHelper {
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
                 .build();
-        WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, policy, req);
+        return WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, policy, req);
     }
 
     /** @return false only when the forecast could not be fetched (worth a retry). */

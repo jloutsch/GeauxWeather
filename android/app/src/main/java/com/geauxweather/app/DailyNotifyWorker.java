@@ -26,6 +26,8 @@ import androidx.work.ExistingWorkPolicy;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * The once-a-day notifications: tomorrow's precipitation (evening) and high UV (morning). Each kind
  * runs at its own chosen hour, then queues its next day's run.
@@ -56,9 +58,14 @@ public class DailyNotifyWorker extends Worker {
         boolean ok = uv ? UvNotifyHelper.check(ctx) : PrecipNotifyHelper.check(ctx);
         if (!ok && getRunAttemptCount() < MAX_RETRIES) return Result.retry();
 
-        // Last statement: REPLACE swaps this finished run for tomorrow's.
-        if (uv) UvNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE);
-        else PrecipNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE);
+        // Last step: REPLACE swaps this finished run for tomorrow's. Wait until it is stored, since the
+        // process may be killed as soon as this worker returns.
+        try {
+            (uv ? UvNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE)
+                    : PrecipNotifyHelper.scheduleNext(ctx, ExistingWorkPolicy.REPLACE)).getResult().get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            android.util.Log.w(WidgetRefreshWorker.TAG, "daily " + (uv ? "uv" : "precip") + ": next run not stored: " + e);
+        }
         return Result.success();
     }
 }
