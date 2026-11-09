@@ -125,7 +125,7 @@ test('in the app, checkNow leaves notifications to the native check (#23)', asyn
     showHurricaneAlert: async () => calls.push(['notify']),
   };
   const sandbox = {
-    window: { Capacitor: { Plugins: { GeauxWeatherNative: plugin } } },
+    window: { Capacitor: { isNativePlatform: () => true, Plugins: { GeauxWeatherNative: plugin } } },
     console,
     setTimeout: noop,
     setInterval: () => calls.push(['poll']),
@@ -141,4 +141,21 @@ test('in the app, checkNow leaves notifications to the native check (#23)', asyn
   const res = await sandbox.window.PureSkyHurricaneAlerts.checkNow();
   assert.equal(res.native, true);
   assert.deepEqual(calls.map((c) => c[0]), ['native']); // no web fetch, no web notification, no polling
+});
+
+test('in the app, no web polling even if the plugin methods are not attached yet at load', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'www', 'js', 'hurricane-alerts.js'), 'utf8');
+  const noop = () => {};
+  const timers = [];
+  const sandbox = {
+    window: { Capacitor: { isNativePlatform: () => true, Plugins: {} } },
+    console,
+    setTimeout: (fn, ms) => timers.push(ms),
+    setInterval: (fn, ms) => timers.push(ms),
+    clearInterval: noop,
+    localStorage: { getItem: (k) => (k === 'geauxweather_hurricane_alerts' ? 'on' : null), setItem: noop },
+    document: { readyState: 'complete', getElementById: () => null, querySelector: () => null, addEventListener: noop },
+  };
+  vm.runInNewContext(src, sandbox);
+  assert.deepEqual(timers.filter((ms) => ms === 4000 || ms === 15 * 60 * 1000), []);
 });

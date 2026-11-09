@@ -39,9 +39,11 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Keeps the widgets and status-bar notification current while the app is closed, and runs the
- * next-hour rain/snow check from the same download. The snapshot the widgets draw from is otherwise
- * written only by the web app when it is open.
+ * The one frequent background job, so the phone wakes once per run instead of once per feature:
+ * - widgets + status-bar notification (their snapshot is otherwise written only by the open app)
+ *   and the next-hour rain/snow check, from one Open-Meteo download;
+ * - severe weather alerts (NWS + NHC), about hourly, or every run while a storm is active.
+ * Tomorrow's-precipitation stays a separate once-a-day job.
  */
 public class WidgetRefreshWorker extends Worker {
     /** Background runs log one line each under this tag: adb logcat -s GeauxWeather */
@@ -51,6 +53,9 @@ public class WidgetRefreshWorker extends Worker {
     private static final String KEY_WIDGET = "geauxweather_widget"; // same snapshot the web app writes
     /** Skip the download if the app wrote the snapshot this recently. */
     static final long FRESH_MS = 15 * 60 * 1000L;
+    /** Alert checks this close together are skipped (hourly while quiet; runs are 30 min apart). */
+    static final long ALERT_GAP_MS = 50 * 60 * 1000L;
+    private static final String KEY_INTERVAL = "geauxweather_bg_interval"; // minutes last scheduled
 
     public WidgetRefreshWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -60,29 +65,65 @@ public class WidgetRefreshWorker extends Worker {
     @Override
     public Result doWork() {
         Context ctx = getApplicationContext();
-        if (!needed(ctx)) {
-            WorkManager.getInstance(ctx).cancelUniqueWork(WORK_NAME); // last widget removed, next-hour check off
-            return Result.success();
+        ensureScheduled(ctx); // re-times after a widget was removed etc.; cancels if nothing needs it
+        if (!needed(ctx)) return Result.success();
+        if (refreshNeeded(ctx)) refresh(ctx);
+        boolean alerts = HurricaneAlertHelper.isEnabled(ctx);
+        if (alerts && alertDue(System.currentTimeMillis(), HurricaneAlertHelper.lastCheckMs(ctx), HurricaneAlertHelper.isFast(ctx))) {
+            HurricaneAlertHelper.check(ctx, false); // may switch fast mode, which reschedules this job
+        } else if (alerts) {
+            Log.i(TAG, "alerts: skipped, checked under 50 min ago");
         }
-        refresh(ctx);
-        return Result.success(); // a failed fetch waits for the next 30-minute run
+        return Result.success(); // a failed fetch waits for the next run
     }
 
-    /** Schedules the refresh if a widget is on the home screen or the next-hour check is on. Safe to call repeatedly. */
+    /** Every run while a storm is active; otherwise when the last check (here or on app open) is 50+ min old. */
+    static boolean alertDue(long nowMs, long lastCheckMs, boolean fast) {
+        return fast || nowMs - lastCheckMs >= ALERT_GAP_MS;
+    }
+
+    /** 15 min while alerts are in storm mode, 30 for widgets / next-hour, else hourly for alerts alone. */
+    static int intervalMinutes(boolean alerts, boolean fast, boolean refresh) {
+        if (alerts && fast) return 15;
+        return refresh ? 30 : 60;
+    }
+
+    /**
+     * Starts, re-times or stops the job to match what is switched on. Safe to call repeatedly: an unchanged
+     * interval keeps the existing schedule (KEEP); a changed one updates it in place (UPDATE).
+     */
     static void ensureScheduled(Context context) {
-        if (!needed(context)) return;
+        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        WorkManager wm = WorkManager.getInstance(context);
+        if (!needed(context)) {
+            wm.cancelUniqueWork(WORK_NAME);
+            prefs.edit().remove(KEY_INTERVAL).apply();
+            return;
+        }
+        int minutes = intervalMinutes(HurricaneAlertHelper.isEnabled(context), HurricaneAlertHelper.isFast(context),
+                refreshNeeded(context));
+        boolean changed = !String.valueOf(minutes).equals(prefs.getString(KEY_INTERVAL, null));
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
         PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(
-                WidgetRefreshWorker.class, 30, TimeUnit.MINUTES)
+                WidgetRefreshWorker.class, minutes, TimeUnit.MINUTES)
                 .setConstraints(constraints)
                 .build();
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, req);
+        wm.enqueueUniquePeriodicWork(WORK_NAME,
+                changed ? ExistingPeriodicWorkPolicy.UPDATE : ExistingPeriodicWorkPolicy.KEEP, req);
+        if (changed) {
+            prefs.edit().putString(KEY_INTERVAL, String.valueOf(minutes)).apply();
+            Log.i(TAG, "background job every " + minutes + " min");
+        }
     }
 
     static boolean needed(Context context) {
+        return refreshNeeded(context) || HurricaneAlertHelper.isEnabled(context);
+    }
+
+    /** Widgets or the next-hour check need the Open-Meteo download. */
+    static boolean refreshNeeded(Context context) {
         return hasWidgets(context) || NextHourNotifyHelper.isEnabled(context);
     }
 

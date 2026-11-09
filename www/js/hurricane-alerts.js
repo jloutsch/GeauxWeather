@@ -32,6 +32,8 @@
 
   const PREF_KEY = 'geauxweather_hurricane_alerts'; // kept for existing installs
   const SEEN_KEY = 'geauxweather_severe_seen';
+  /** Set after the first completed check; an empty seen record alone just means nothing was active. */
+  const CHECKED_KEY = 'geauxweather_severe_checked';
   const LEVEL_KEY = 'geauxweather_alert_level';
   const LOC_KEY = 'geauxweather_location';
   const DEFAULT_KEY = 'geauxweather_default';
@@ -450,15 +452,20 @@
     return p && typeof p.checkHurricaneAlerts === 'function' ? p : null;
   }
 
+  /** In the Android app (the plugin's methods may not be attached yet when this script loads). */
+  function inApp() {
+    return !!(global.Capacitor && typeof global.Capacitor.isNativePlatform === 'function' && global.Capacitor.isNativePlatform());
+  }
+
   async function checkNow(opts) {
     opts = opts || {};
     if (!isEnabled() && !opts.force) return { alerts: [] };
     const native = nativeAlerts();
-    if (native) {
+    if (native || inApp()) {
       // In the app, notifications come only from the native check and its seen record;
       // a second web check with its own record could announce the same warning again (#23).
       try {
-        await native.checkHurricaneAlerts({ seedOnly: false });
+        if (native) await native.checkHurricaneAlerts({ seedOnly: false });
       } catch (e) {
         console.warn('native alert check failed', e);
       }
@@ -474,7 +481,8 @@
       }
 
       const seen = loadSeen();
-      const firstRun = Object.keys(seen).length === 0 && !opts.allowSeedNotify;
+      const firstRun =
+        !localStorage.getItem(CHECKED_KEY) && Object.keys(seen).length === 0 && !opts.allowSeedNotify;
 
       let nws = [];
       let tropical = [];
@@ -498,6 +506,7 @@
         keepNws: nwsFailed,
         keepNhc: nhcFailed,
       });
+      localStorage.setItem(CHECKED_KEY, '1');
       if (!firstRun) {
         for (let i = 0; i < alerts.length; i++) {
           await notifyNative(
@@ -541,7 +550,7 @@
 
   async function setEnabled(on) {
     await syncPreferences(!!on);
-    if (on && nativeAlerts()) {
+    if (on && inApp()) {
       await checkNow({ force: true }); // native check seeds its own record on first run
     } else if (on) {
       try {
@@ -820,7 +829,7 @@
     wireSettings();
     updateHint();
     // In the app, MainActivity.onResume and WorkManager run the checks; polling here would add a third.
-    if (isEnabled() && !nativeAlerts()) {
+    if (isEnabled() && !inApp()) {
       startPolling();
       setTimeout(function () {
         checkNow();

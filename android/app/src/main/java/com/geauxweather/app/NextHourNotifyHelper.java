@@ -66,11 +66,10 @@ public final class NextHourNotifyHelper {
         // A wet marker left from before it was turned off would swallow the next rain's notification
         if (enabled) edit.remove(KEY_WET);
         edit.apply();
+        WidgetRefreshWorker.ensureScheduled(context); // start, re-time or stop the shared job
         if (enabled) {
-            WidgetRefreshWorker.ensureScheduled(context);
             new Thread(() -> WidgetRefreshWorker.refresh(context)).start(); // check now, not in up to 30 min
         }
-        // When turned off, the job cancels itself on its next run if no widget needs it.
     }
 
     /**
