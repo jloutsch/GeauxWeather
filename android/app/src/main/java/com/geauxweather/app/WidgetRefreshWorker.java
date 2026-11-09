@@ -56,6 +56,7 @@ public class WidgetRefreshWorker extends Worker {
     /** Alert checks this close together are skipped (hourly while quiet; runs are 30 min apart). */
     static final long ALERT_GAP_MS = 50 * 60 * 1000L;
     private static final String KEY_INTERVAL = "geauxweather_bg_interval"; // minutes last scheduled
+    private static final String KEY_MODEL = "geauxweather_model"; // Settings → Forecast model
 
     public WidgetRefreshWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -161,6 +162,7 @@ public class WidgetRefreshWorker extends Worker {
         }
         String units = prev != null ? prev.optString("units", "imperial") : "imperial";
 
+        String model = forecastModel(prefs.getString(KEY_MODEL, null));
         JSONObject json;
         try {
             String url = String.format(Locale.US,
@@ -168,14 +170,20 @@ public class WidgetRefreshWorker extends Worker {
                             + "&current=temperature_2m,weather_code,is_day,precipitation"
                             + "&daily=temperature_2m_max,temperature_2m_min"
                             + "&minutely_15=precipitation,snowfall&forecast_minutely_15=6"
-                            + "&forecast_days=1&timezone=auto&timeformat=unixtime%s",
-                    loc[0], loc[1], "metric".equals(units) ? "" : "&temperature_unit=fahrenheit");
+                            + "&forecast_days=1&timezone=auto&timeformat=unixtime%s%s",
+                    loc[0], loc[1], "metric".equals(units) ? "" : "&temperature_unit=fahrenheit",
+                    model == null ? "" : "&models=best_match," + model);
             String body = HurricaneAlertHelper.httpGet(url, "application/json");
             if (body == null) {
                 Log.w(TAG, "widget refresh: download failed");
                 return false;
             }
             json = new JSONObject(body);
+            if (model != null) {
+                // Same split as the app: today's high/low from the chosen model, "now" and next hour from Best match
+                pickModel(json, "daily", model);
+                pickModel(json, "minutely_15", "best_match");
+            }
             JSONObject c = json.getJSONObject("current");
             JSONObject d = json.optJSONObject("daily");
             int code = c.optInt("weather_code", -1);
@@ -207,6 +215,27 @@ public class WidgetRefreshWorker extends Worker {
             Log.w(TAG, "next-hour check failed: " + e);
         }
         return true;
+    }
+
+    /** @return the chosen Open-Meteo model, or null for Best match (and for anything unexpected). */
+    static String forecastModel(String pref) {
+        if ("ecmwf_ifs025".equals(pref) || "gfs_seamless".equals(pref) || "gem_seamless".equals(pref)) return pref;
+        return null;
+    }
+
+    /** Multi-model responses suffix each column with its model; keep one model's under the plain names. */
+    private static void pickModel(JSONObject json, String key, String model) throws org.json.JSONException {
+        JSONObject block = json.optJSONObject(key);
+        if (block == null) return;
+        String suffix = "_" + model;
+        JSONObject out = new JSONObject();
+        out.put("time", block.opt("time"));
+        java.util.Iterator<String> it = block.keys();
+        while (it.hasNext()) {
+            String k = it.next();
+            if (k.endsWith(suffix)) out.put(k.substring(0, k.length() - suffix.length()), block.get(k));
+        }
+        json.put(key, out);
     }
 
     private static String dailyTemp(JSONObject daily, String key) {

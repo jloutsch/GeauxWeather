@@ -41,3 +41,43 @@ test('night keeps the condition text', () => {
 test('unknown code falls back to a cloud day or night', () => {
   assert.deepEqual({ ...W.codeToCondition(12345, false) }, { text: '—', icon: '☁️' });
 });
+
+test('a chosen model supplies hourly and daily; Best match supplies the next hour', () => {
+  const data = {
+    current: { temperature_2m: 55 },
+    hourly: { time: ['t0'], temperature_2m_best_match: [50], temperature_2m_ecmwf_ifs025: [52] },
+    daily: {
+      time: ['d0', 'd1', 'd2'],
+      temperature_2m_max_best_match: [60, 61, 62],
+      temperature_2m_max_gem_seamless: [58, 59, null], // GEM stops short of the last day
+    },
+    minutely_15: { time: ['m0'], precipitation_best_match: [0.2], precipitation_gem_seamless: [0] },
+  };
+  const out = W.applyModel(JSON.parse(JSON.stringify(data)), 'gem_seamless');
+  assert.deepEqual(Array.from(out.daily.temperature_2m_max), [58, 59]);
+  assert.deepEqual(Array.from(out.daily.time), ['d0', 'd1']);
+  assert.deepEqual(Array.from(out.minutely_15.precipitation), [0.2]);
+  assert.equal(out.current.temperature_2m, 55);
+  assert.equal(W.applyModel(data, 'best_match'), data); // default: untouched
+  const ec = W.applyModel(JSON.parse(JSON.stringify(data)), 'ecmwf_ifs025');
+  assert.deepEqual(Array.from(ec.hourly.temperature_2m), [52]);
+});
+
+test("a model's missing values come from Best match, but its missing days are dropped", () => {
+  const data = {
+    daily: {
+      time: ['d0', 'd1', 'd2'],
+      temperature_2m_max_best_match: [60, 61, 62],
+      temperature_2m_max_gem_seamless: [58, 59, null],
+      uv_index_max_best_match: [3, 4, 5],
+      uv_index_max_gem_seamless: [null, null, null], // GEM has no UV
+    },
+  };
+  const out = W.applyModel(data, 'gem_seamless');
+  assert.deepEqual(Array.from(out.daily.uv_index_max), [3, 4]);
+  assert.deepEqual(Array.from(out.daily.temperature_2m_max), [58, 59]);
+});
+
+test('unknown saved model falls back to Best match', () => {
+  assert.equal(W.forecastModel(), 'best_match'); // no localStorage in this sandbox
+});

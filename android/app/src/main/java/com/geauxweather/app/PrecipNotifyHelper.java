@@ -132,8 +132,8 @@ public final class PrecipNotifyHelper {
             String url = String.format(Locale.US,
                     "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
                             + "&daily=precipitation_probability_max,snowfall_sum,rain_sum,showers_sum"
-                            + "&forecast_days=2&timezone=auto",
-                    loc[0], loc[1]);
+                            + "&forecast_days=2&timezone=auto%s",
+                    loc[0], loc[1], model(prefs));
             String body = HurricaneAlertHelper.httpGet(url, "application/json");
             if (body == null) {
                 Log.w(WidgetRefreshWorker.TAG, "tomorrow precip: download failed");
@@ -175,6 +175,12 @@ public final class PrecipNotifyHelper {
         if (snow) return "Snow likely tomorrow";
         if (rain) return "Rain likely tomorrow";
         return "Precipitation likely tomorrow";
+    }
+
+    /** Settings → Forecast model; one model, so the response keeps plain column names. */
+    private static String model(SharedPreferences prefs) {
+        String m = WidgetRefreshWorker.forecastModel(prefs.getString("geauxweather_model", null));
+        return m == null ? "" : "&models=" + m;
     }
 
     private static double optDouble(JSONArray arr) {

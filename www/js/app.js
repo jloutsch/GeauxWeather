@@ -275,6 +275,22 @@
       refreshPlacesWeather(true);
     });
   }
+  const modelSelect = document.getElementById('forecast-model');
+  if (modelSelect) {
+    modelSelect.value = W.forecastModel();
+    modelSelect.addEventListener('change', async function () {
+      localStorage.setItem('forecast_model', modelSelect.value);
+      try {
+        // Widget refresh and the tomorrow's-precipitation notification read it natively
+        const prefs = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
+        if (prefs) await prefs.set({ key: 'geauxweather_model', value: modelSelect.value });
+      } catch (e) {
+        console.warn('model setting skipped', e);
+      }
+      if (homeLoc) loadHomeWeather(homeLoc, true);
+      refreshPlacesWeather(true);
+    });
+  }
   unitSelects.forEach(function (sel) {
     sel.addEventListener('change', async function () {
       U.set(sel.dataset.unit, sel.value);

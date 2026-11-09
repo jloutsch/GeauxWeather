@@ -60,6 +60,67 @@
     return res.json();
   }
 
+  /** Forecast models offered in Settings (keyless Open-Meteo); the first is the default. */
+  const MODELS = ['best_match', 'ecmwf_ifs025', 'gfs_seamless', 'gem_seamless'];
+
+  function forecastModel() {
+    try {
+      const m = global.localStorage && global.localStorage.getItem('forecast_model');
+      return MODELS.indexOf(m) > 0 ? m : 'best_match';
+    } catch (_) {
+      return 'best_match';
+    }
+  }
+
+  /**
+   * From a multi-model block, keep one model's `<var>_<model>` columns under their plain names.
+   * Values that model lacks (ECMWF and GEM have no UV) come from `fallback`'s column, if given.
+   */
+  function pickModel(block, model, fallback) {
+    if (!block) return block;
+    const suffix = '_' + model;
+    const out = { time: block.time };
+    Object.keys(block).forEach(function (k) {
+      if (k.slice(-suffix.length) !== suffix) return;
+      const name = k.slice(0, -suffix.length);
+      const alt = fallback && block[name + '_' + fallback];
+      out[name] = alt
+        ? block[k].map(function (v, i) {
+            return v == null ? alt[i] : v;
+          })
+        : block[k];
+    });
+    return out;
+  }
+
+  /** Keep the first n days of every daily column. */
+  function sliceDays(daily, n) {
+    const out = {};
+    Object.keys(daily).forEach(function (k) {
+      out[k] = Array.isArray(daily[k]) ? daily[k].slice(0, n) : daily[k];
+    });
+    return out;
+  }
+
+  /**
+   * With models=best_match,<model>: "now" (current, next hour) stays on Best match, which uses
+   * high-resolution local models; hourly and daily come from the chosen model, with its gaps
+   * (e.g. no UV) filled from Best match. Open-Meteo returns `current` for the first model listed.
+   */
+  function applyModel(data, model) {
+    if (model === 'best_match') return data;
+    data.hourly = pickModel(data.hourly, model, 'best_match');
+    if (data.daily) {
+      // Days the chosen model doesn't cover at all (GEM can stop short of 10) are dropped, not borrowed
+      const own = pickModel(data.daily, model).temperature_2m_max || [];
+      let n = own.length;
+      while (n > 0 && own[n - 1] == null) n--;
+      data.daily = sliceDays(pickModel(data.daily, model, 'best_match'), n);
+    }
+    data.minutely_15 = pickModel(data.minutely_15, 'best_match');
+    return data;
+  }
+
   async function fetchForecast(lat, lon, units) {
     units = units || 'imperial';
     const tempUnit = units === 'metric' ? 'celsius' : 'fahrenheit';
@@ -120,10 +181,12 @@
       timezone: 'auto',
       forecast_days: 10,
     });
+    const model = forecastModel();
+    if (model !== 'best_match') params.set('models', 'best_match,' + model);
 
     const res = await fetch(BASE + '?' + params);
     if (!res.ok) throw new Error('Open-Meteo ' + res.status);
-    const data = await res.json();
+    const data = applyModel(await res.json(), model);
     // Attach air quality (best-effort; don't fail the whole forecast)
     try {
       const aq = await fetchAirQuality(lat, lon);
@@ -223,5 +286,7 @@
     codeToMood: codeToMood,
     windDir: windDir,
     formatVis: formatVis,
+    forecastModel: forecastModel,
+    applyModel: applyModel,
   };
 })(window);
