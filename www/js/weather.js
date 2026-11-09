@@ -124,9 +124,9 @@
   async function fetchForecast(lat, lon, units) {
     units = units || 'imperial';
     const tempUnit = units === 'metric' ? 'celsius' : 'fahrenheit';
-    const U = global.GeauxUnits && global.GeauxUnits.get();
-    const windUnit = U ? U.wind : units === 'metric' ? 'kmh' : 'mph';
-    const precipUnit = U ? U.precip : units === 'metric' ? 'mm' : 'inch';
+    const U = global.GeauxUnits.get(); // units.js loads first (index.html)
+    const windUnit = U.wind;
+    const precipUnit = U.precip;
 
     const params = new URLSearchParams({
       latitude: lat,
@@ -252,18 +252,6 @@
     return dirs[Math.round(deg / 45) % 8];
   }
 
-  function formatVis(meters, units) {
-    if (global.GeauxUnits) return global.GeauxUnits.formatVisibility(meters);
-    if (meters == null) return '—';
-    if (units === 'metric') {
-      return meters >= 1000
-        ? (meters / 1000).toFixed(1) + ' km'
-        : Math.round(meters) + ' m';
-    }
-    const miles = meters / 1609.34;
-    return miles >= 10 ? Math.round(miles) + ' mi' : miles.toFixed(1) + ' mi';
-  }
-
   /**
    * Coarse sky mood for backgrounds + status chrome.
    * @returns {'sunny'|'cloudy'|'rain'}
@@ -296,7 +284,6 @@
     codeToCondition: codeToCondition,
     codeToMood: codeToMood,
     windDir: windDir,
-    formatVis: formatVis,
     forecastModel: forecastModel,
     applyModel: applyModel,
   };
