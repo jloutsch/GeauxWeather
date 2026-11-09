@@ -56,6 +56,7 @@ final class BackgroundJobs {
         if (PrecipNotifyHelper.isEnabled(context)) ops.add(PrecipNotifyHelper.scheduleNext(context, ExistingWorkPolicy.REPLACE));
         if (UvNotifyHelper.isEnabled(context)) ops.add(UvNotifyHelper.scheduleNext(context, ExistingWorkPolicy.REPLACE));
         if (AqiNotifyHelper.isEnabled(context)) ops.add(AqiNotifyHelper.scheduleNext(context, ExistingWorkPolicy.REPLACE));
+        if (SummaryNotifyHelper.isEnabled(context)) ops.add(SummaryNotifyHelper.scheduleNext(context, ExistingWorkPolicy.REPLACE));
         try {
             for (Operation op : ops) op.getResult().get(10, TimeUnit.SECONDS);
         } catch (Exception e) {

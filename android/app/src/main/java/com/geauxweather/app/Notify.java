@@ -38,6 +38,15 @@ final class Notify {
 
     private Notify() {}
 
+    /** °F unless the app last saved metric weather (the widget snapshot carries the app's units). */
+    static boolean imperial(android.content.SharedPreferences prefs) {
+        try {
+            return !"metric".equals(new org.json.JSONObject(prefs.getString("geauxweather_widget", "{}")).optString("units"));
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
     /**
      * Posts a notification on its own channel that opens {@code open} (made a fresh task) when tapped.
      * @return false when Android 13+ notification permission is missing

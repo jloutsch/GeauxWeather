@@ -111,7 +111,7 @@ public final class AqiNotifyHelper {
 
         double[] loc = HurricaneAlertHelper.resolveLocation(prefs);
         if (loc == null) return true;
-        boolean us = usScale(prefs);
+        boolean us = Notify.imperial(prefs); // the Today AQI tile: US AQI for °F, EU AQI for °C
         String field = us ? "us_aqi" : "european_aqi";
         try {
             String body = HurricaneAlertHelper.httpGet(String.format(Locale.US,
@@ -161,15 +161,6 @@ public final class AqiNotifyHelper {
         } catch (Exception e) {
             Log.w(WidgetRefreshWorker.TAG, "aqi: failed: " + e);
             return false;
-        }
-    }
-
-    /** The app's rule (Today AQI tile): US AQI for °F, EU AQI for °C, read from the widget snapshot's units. */
-    private static boolean usScale(SharedPreferences prefs) {
-        try {
-            return !"metric".equals(new JSONObject(prefs.getString("geauxweather_widget", "{}")).optString("units"));
-        } catch (Exception e) {
-            return true;
         }
     }
 
