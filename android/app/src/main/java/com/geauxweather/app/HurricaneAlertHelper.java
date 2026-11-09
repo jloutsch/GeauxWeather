@@ -412,13 +412,13 @@ public final class HurricaneAlertHelper {
     // ─── Location ─────────────────────────────────────────────────────────
 
     /** @return [lat, lon] or null */
-    private static double[] resolveLocation(SharedPreferences prefs) {
+    static double[] resolveLocation(SharedPreferences prefs) {
         double[] fromHome = parseLatLon(prefs.getString(KEY_LOC, null));
         if (fromHome != null) return fromHome;
         return parseLatLon(prefs.getString(KEY_DEFAULT, null));
     }
 
-    private static String resolveLocationLabel(SharedPreferences prefs) {
+    static String resolveLocationLabel(SharedPreferences prefs) {
         String label = parseLabel(prefs.getString(KEY_LOC, null));
         if (label != null && !label.isEmpty()) return label;
         label = parseLabel(prefs.getString(KEY_DEFAULT, null));
@@ -545,7 +545,7 @@ public final class HurricaneAlertHelper {
         if (nm != null) nm.createNotificationChannel(ch);
     }
 
-    private static String httpGet(String urlStr, String accept) throws Exception {
+    static String httpGet(String urlStr, String accept) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
         conn.setConnectTimeout(20000);
         conn.setReadTimeout(30000);
