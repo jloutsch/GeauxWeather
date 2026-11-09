@@ -396,6 +396,11 @@
       }
     }
 
+    // A failed feed keeps its previous entries; otherwise the next run would re-notify them, or
+    // (record emptied) count as a quiet first run and silently swallow a new warning.
+    Object.keys(prev).forEach(function (k) {
+      if ((opts.keepNws && k.indexOf('nws:') === 0) || (opts.keepNhc && k.indexOf('nhc:') === 0)) next[k] = prev[k];
+    });
     if (!listAll) saveSeen(next);
     return alerts;
   }
@@ -451,18 +456,26 @@
 
       let nws = [];
       let tropical = [];
+      let nwsFailed = false;
+      let nhcFailed = false;
       try {
         nws = await fetchNwsAtPoint(loc.lat, loc.lon);
       } catch (e) {
+        nwsFailed = true;
         console.warn('NWS point alerts failed', e);
       }
       try {
         tropical = await fetchNearbyTropical(loc.lat, loc.lon);
       } catch (e) {
+        nhcFailed = true;
         console.warn('NHC nearby failed', e);
       }
 
-      const alerts = diffAndCollect(loc, nws, tropical, { seedOnly: firstRun });
+      const alerts = diffAndCollect(loc, nws, tropical, {
+        seedOnly: firstRun,
+        keepNws: nwsFailed,
+        keepNhc: nhcFailed,
+      });
       if (!firstRun) {
         for (let i = 0; i < alerts.length; i++) {
           await notifyNative(
@@ -832,6 +845,7 @@
     mapLayerForEvent: mapLayerForEvent,
     renderActiveList: renderActiveList,
     collectForList: collectForList,
+    diffAndCollect: diffAndCollect,
   };
   global.PureSkySevereAlerts = global.PureSkyHurricaneAlerts;
   global.PureSkySevere = global.PureSkyHurricaneAlerts;
