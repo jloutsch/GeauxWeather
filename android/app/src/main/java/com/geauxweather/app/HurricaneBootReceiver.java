@@ -33,6 +33,15 @@ public class HurricaneBootReceiver extends BroadcastReceiver {
                 && !Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction())) {
             return;
         }
-        BackgroundJobs.rescheduleAll(context); // after an update or reboot
+        // After an update or reboot. goAsync keeps the process alive until WorkManager has stored it all.
+        final PendingResult pending = goAsync();
+        final Context app = context.getApplicationContext();
+        new Thread(() -> {
+            try {
+                BackgroundJobs.rescheduleAll(app);
+            } finally {
+                pending.finish();
+            }
+        }).start();
     }
 }

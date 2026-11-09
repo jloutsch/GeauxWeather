@@ -28,6 +28,7 @@ import androidx.work.Constraints;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
+import androidx.work.Operation;
 import androidx.work.WorkManager;
 
 import org.json.JSONArray;
@@ -81,7 +82,7 @@ public final class PrecipNotifyHelper {
      * request re-queued after each run (instead of periodic work) keeps it on that hour
      * without drift and without hourly wake-ups.
      */
-    static void scheduleNext(Context context, ExistingWorkPolicy policy) {
+    static Operation scheduleNext(Context context, ExistingWorkPolicy policy) {
         int hour = parseInt(prefs(context).getString(KEY_HOUR, "18"), 18);
         long delayMs = millisUntilNext(System.currentTimeMillis(), hour);
         Constraints constraints = new Constraints.Builder()
@@ -93,7 +94,7 @@ public final class PrecipNotifyHelper {
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
                 .build();
-        WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, policy, req);
+        return WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, policy, req);
     }
 
     /** Milliseconds from now until the next HH:00 local time (tomorrow if already past). */
