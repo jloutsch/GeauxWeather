@@ -85,3 +85,22 @@ test('in-app list puts the most severe alert first', () => {
   ];
   assert.deepEqual(Array.from(A.collectForList(loc, nws, []), (x) => x.detail.event), ['Flood Watch', 'Rip Current Statement']);
 });
+
+test('a failed NWS request leaves the current alert list on screen', async () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'www', 'js', 'hurricane-alerts.js'), 'utf8');
+  const noop = () => {};
+  const list = { innerHTML: 'Tornado Warning', classList: { toggle: noop, contains: () => false }, querySelectorAll: () => [] };
+  const sandbox = {
+    window: {
+      PureSkyLocation: { loadSavedLocation: async () => ({ lat: 35, lon: -97, label: 'Moore' }) },
+      PureSkyNet: { fetch: async () => { throw new Error('HTTP 500'); } },
+    },
+    console: { warn: noop, log: noop },
+    setTimeout: noop, setInterval: noop, clearInterval: noop,
+    localStorage: { getItem: () => null, setItem: noop },
+    document: { readyState: 'complete', getElementById: (id) => (id === 'alerts-list' ? list : null), querySelector: () => null, addEventListener: noop },
+  };
+  vm.runInNewContext(src, sandbox);
+  await sandbox.window.PureSkyHurricaneAlerts.renderActiveList();
+  assert.equal(list.innerHTML, 'Tornado Warning');
+});

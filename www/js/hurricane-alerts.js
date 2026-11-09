@@ -614,7 +614,11 @@
     if (loc) {
       try {
         nws = await fetchNwsAtPoint(loc.lat, loc.lon);
-      } catch (e) {} // outside NWS coverage or offline → no list
+      } catch (e) {
+        // Keep what is shown: one failed request (offline, NWS 500) must not hide an active warning.
+        // When nothing is shown (e.g. outside the US, where NWS always fails) still list nearby storms.
+        if (!el.classList.contains('hidden')) return;
+      }
       try {
         tropical = await fetchNearbyTropical(loc.lat, loc.lon);
       } catch (e) {}
