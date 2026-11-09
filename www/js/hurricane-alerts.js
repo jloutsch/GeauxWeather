@@ -613,7 +613,7 @@
         hint.textContent =
           'NWS warnings & watches (tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for ' +
           loc.label +
-          ' (home or default), checked every 15 minutes. Tap a notification to open the map + details.';
+          ' (home or default), checked about hourly, and every 15 minutes while a storm watch or warning is active. Tap a notification to open the map + details.';
       } else {
         hint.textContent =
           'NWS warnings & watches (tornado, thunderstorm, flood, winter storm, high wind…) and nearby tropical storms for your home or default location. Set a location first.';

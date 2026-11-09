@@ -94,7 +94,7 @@
             <span>60m</span>
           </div>
         </div>
-        <div class="hourly-wrap">
+        <div class="hourly-wrap" id="hourly-section">
           <h2 class="section-title">Hourly</h2>
           <div id="hourly" class="hourly"></div>
         </div>
@@ -255,8 +255,10 @@
           </label>
         </div>
         <p class="settings-hint muted small" id="hurricane-alerts-hint">
-          NWS warnings &amp; watches (tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for your home or default location, checked every 15 minutes. Tap a notification to open the map and alert details.
+          NWS warnings &amp; watches (tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for your home or default location, checked about hourly, and every 15 minutes while a storm watch or warning is active. Tap a notification to open the map and alert details.
         </p>
+        <h2 class="section-title" style="margin-top:4px">Today screen</h2>
+        <div class="settings-group" id="today-sections-settings"></div>
         <h2 class="section-title" style="margin-top:4px">Home screen widget</h2>
         <div class="settings-group">
           <label class="setting-row setting-row-stack">
@@ -344,6 +346,7 @@
   <script src="lib/leaflet/leaflet.js"></script>
   <script src="js/location.js"></script>
   <script src="js/units.js"></script>
+  <script src="js/sections.js"></script>
   <script src="js/weather.js"></script>
   <script src="js/net.js"></script>
   <script src="js/kmz.js"></script>

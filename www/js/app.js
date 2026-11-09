@@ -246,8 +246,56 @@
     }
   }
 
+  const S = window.GeauxSections;
+  const sectionsBox = document.getElementById('today-sections-settings');
+  /** Settings → Today screen: a switch per section, plus up/down for the movable ones. */
+  function renderSectionSettings(list) {
+    S.apply(list, document);
+    if (!sectionsBox) return;
+    const movable = list.filter((s) => !S.item(s.id).fixed);
+    sectionsBox.innerHTML = list
+      .map(function (s) {
+        const it = S.item(s.id);
+        const pos = movable.findIndex((m) => m.id === s.id);
+        const arrows = it.fixed
+          ? ''
+          : '<span class="section-order">' +
+            '<button type="button" data-id="' + s.id + '" data-d="-1" aria-label="Move ' + it.label + ' up"' +
+            (pos === 0 ? ' disabled' : '') + '>↑</button>' +
+            '<button type="button" data-id="' + s.id + '" data-d="1" aria-label="Move ' + it.label + ' down"' +
+            (pos === movable.length - 1 ? ' disabled' : '') + '>↓</button></span>';
+        return (
+          '<div class="setting-row"><label><input type="checkbox" data-id="' + s.id + '"' +
+          (s.on ? ' checked' : '') + ' /> ' + it.label + '</label>' + arrows + '</div>'
+        );
+      })
+      .join('');
+  }
+  if (sectionsBox) {
+    sectionsBox.addEventListener('change', function (e) {
+      const id = e.target.dataset && e.target.dataset.id;
+      if (!id) return;
+      const list = S.load().map((s) => (s.id === id ? { id: id, on: e.target.checked } : s));
+      S.save(list);
+      renderSectionSettings(list);
+    });
+    sectionsBox.addEventListener('click', function (e) {
+      const btn = e.target.closest('button[data-d]');
+      if (!btn) return;
+      const list = S.move(S.load(), btn.dataset.id, Number(btn.dataset.d));
+      S.save(list);
+      renderSectionSettings(list);
+      // Keep focus on the moved row; its other arrow if this one just greyed out at the end
+      const row = sectionsBox.querySelectorAll('button[data-id="' + btn.dataset.id + '"]');
+      const next = Array.from(row).find((b) => b.dataset.d === btn.dataset.d && !b.disabled) ||
+        Array.from(row).find((b) => !b.disabled);
+      if (next) next.focus();
+    });
+  }
+
   function loadPrefs() {
     if (unitsSelect) unitsSelect.value = units;
+    renderSectionSettings(S.load());
     showUnitPrefs();
     const skyToggle = document.getElementById('sky-bg-toggle');
     if (skyToggle) skyToggle.checked = skyBgEnabled;
