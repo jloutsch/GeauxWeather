@@ -1,8 +1,9 @@
 # When tunefriend/GeauxWeather publishes a new release, merge it into this fork:
-#  - clean merge  → push sync/upstream-<tag>, open a PR into main, start CI on it.
+#  - clean merge  → push sync/upstream-<tag>, open a PR into main, start CI on it (its result shows on
+#                   the PR as the "CI (sync branch)" status).
 #                   CI failing on that PR means upstream broke one of this fork's features.
 #  - conflicts    → open an issue listing the conflicting files (resolve by hand).
-#  - push refused → open an issue (the Actions token can't push upstream changes to .github/workflows).
+#  - push refused → open an issue (GitHub may refuse workflow-file changes pushed with the Actions token).
 # A manual run can merge another ref (upstream main between releases) or another repository (testing).
 # Needs: Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests".
 name: Upstream sync
@@ -88,7 +89,7 @@ jobs:
             if ! git push --force origin "$branch" 2> push.err; then
               cat push.err
               # shellcheck disable=SC2016
-              report "Upstream $name needs a manual merge" "$(printf '[%s](%s) merges cleanly, but the sync job could not push it:\n\n```\n%s\n```\n\nThe Actions token cannot push changes to `.github/workflows/`; merge it locally and push with your own credentials:\n%s' "$name" "$link" "$(cat push.err)" "$fix_locally")"
+              report "Upstream $name needs a manual merge" "$(printf '[%s](%s) merges cleanly, but the sync job could not push it:\n\n```\n%s\n```\n\nGitHub can refuse changes to `.github/workflows/` pushed with the Actions token. Merge it locally and push with your own credentials:\n%s' "$name" "$link" "$(cat push.err)" "$fix_locally")"
               exit 0
             fi
             if ! gh pr view "$branch" --json number >/dev/null 2>&1; then
