@@ -3,7 +3,7 @@
 // The Open-Meteo requests are built by the app's own www/js/weather.js, so they can't drift from it.
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const UA = { 'User-Agent': 'GeauxWeather API check (github.com/jloutsch/GeauxWeather)', Accept: 'application/json' };
 const problems = [];
@@ -173,5 +173,6 @@ async function main() {
   }
 }
 
-// Run the checks only when executed directly (tests import fetchRetry)
-if (import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+// Run the checks only when executed directly (tests import fetchRetry). Real paths, so a symlinked
+// or space-containing path still runs them; the workflow also fails if no "checks passed" line appears.
+if (process.argv[1] && fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(process.argv[1])) await main();
