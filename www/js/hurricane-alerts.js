@@ -444,9 +444,26 @@
     return false;
   }
 
+  /** The Android plugin, when running in the app; null in a browser. */
+  function nativeAlerts() {
+    const p = global.Capacitor && global.Capacitor.Plugins && global.Capacitor.Plugins.GeauxWeatherNative;
+    return p && typeof p.checkHurricaneAlerts === 'function' ? p : null;
+  }
+
   async function checkNow(opts) {
     opts = opts || {};
     if (!isEnabled() && !opts.force) return { alerts: [] };
+    const native = nativeAlerts();
+    if (native) {
+      // In the app, notifications come only from the native check and its seen record;
+      // a second web check with its own record could announce the same warning again (#23).
+      try {
+        await native.checkHurricaneAlerts({ seedOnly: false });
+      } catch (e) {
+        console.warn('native alert check failed', e);
+      }
+      return { alerts: [], native: true };
+    }
     if (checking) return { alerts: [] };
     checking = true;
     try {
@@ -492,22 +509,6 @@
         }
       }
 
-      try {
-        if (
-          global.Capacitor &&
-          global.Capacitor.Plugins &&
-          global.Capacitor.Plugins.GeauxWeatherNative &&
-          typeof global.Capacitor.Plugins.GeauxWeatherNative
-            .checkHurricaneAlerts === 'function'
-        ) {
-          await global.Capacitor.Plugins.GeauxWeatherNative.checkHurricaneAlerts(
-            { seedOnly: firstRun }
-          );
-        }
-      } catch (e) {
-        /* ignore */
-      }
-
       return {
         alerts: alerts,
         location: loc,
@@ -540,7 +541,9 @@
 
   async function setEnabled(on) {
     await syncPreferences(!!on);
-    if (on) {
+    if (on && nativeAlerts()) {
+      await checkNow({ force: true }); // native check seeds its own record on first run
+    } else if (on) {
       try {
         await checkNow({ force: true, allowSeedNotify: false });
         // Ensure seed: if first run, checkNow already seeded
@@ -816,7 +819,8 @@
   function init() {
     wireSettings();
     updateHint();
-    if (isEnabled()) {
+    // In the app, MainActivity.onResume and WorkManager run the checks; polling here would add a third.
+    if (isEnabled() && !nativeAlerts()) {
       startPolling();
       setTimeout(function () {
         checkNow();

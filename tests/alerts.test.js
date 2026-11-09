@@ -115,3 +115,30 @@ test('a failed NWS check keeps the seen record, so the next check neither re-not
   B.diffAndCollect({ lat: 35, lon: -97, label: 'Moore' }, [], [], { keepNws: true });
   assert.ok(saved && saved[key], 'seen record lost the active warning after a failed request');
 });
+
+test('in the app, checkNow leaves notifications to the native check (#23)', async () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'www', 'js', 'hurricane-alerts.js'), 'utf8');
+  const noop = () => {};
+  const calls = [];
+  const plugin = {
+    checkHurricaneAlerts: async (o) => calls.push(['native', o]),
+    showHurricaneAlert: async () => calls.push(['notify']),
+  };
+  const sandbox = {
+    window: { Capacitor: { Plugins: { GeauxWeatherNative: plugin } } },
+    console,
+    setTimeout: noop,
+    setInterval: () => calls.push(['poll']),
+    clearInterval: noop,
+    fetch: async () => {
+      calls.push(['fetch']);
+      throw new Error('no network in tests');
+    },
+    localStorage: { getItem: (k) => (k === 'geauxweather_hurricane_alerts' ? 'on' : null), setItem: noop },
+    document: { readyState: 'complete', getElementById: () => null, querySelector: () => null, addEventListener: noop },
+  };
+  vm.runInNewContext(src, sandbox);
+  const res = await sandbox.window.PureSkyHurricaneAlerts.checkNow();
+  assert.equal(res.native, true);
+  assert.deepEqual(calls.map((c) => c[0]), ['native']); // no web fetch, no web notification, no polling
+});
