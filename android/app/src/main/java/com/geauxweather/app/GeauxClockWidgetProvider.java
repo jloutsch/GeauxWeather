@@ -103,7 +103,7 @@ public class GeauxClockWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(R.id.widget_icon, iconFor(data.weatherCode, data.condition, isDay));
         views.setTextViewText(R.id.widget_temp, data.temp);
         views.setTextViewText(R.id.widget_hilow, data.hilow);
-        String fmt = clockFormat(context.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE)
+        String fmt = clockFormat(context.getSharedPreferences(Notify.PREFS, Context.MODE_PRIVATE)
                 .getString("geauxweather_clock", "auto"));
         if (fmt != null) { // "auto" keeps the layout's formats, which follow the phone's 24-hour setting
             views.setCharSequence(R.id.clock_time, "setFormat12Hour", fmt);

@@ -48,7 +48,7 @@ public final class WeatherNotificationHelper {
 
     private static final String CHANNEL_ID = "geauxweather_status";
     private static final int NOTIF_ID = 42;
-    private static final String PREFS_FILE = "CapacitorStorage";
+    private static final String PREFS_FILE = Notify.PREFS;
     private static final String KEY_WIDGET = "geauxweather_widget";
     /** "off" hides the status-bar notification; missing or "on" shows it. Set from Settings. */
     private static final String KEY_ENABLED = "geauxweather_status_notification";

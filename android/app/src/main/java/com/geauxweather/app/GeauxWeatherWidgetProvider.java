@@ -40,7 +40,7 @@ import org.json.JSONObject;
  */
 public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
 
-    private static final String PREFS_FILE = "CapacitorStorage";
+    private static final String PREFS_FILE = Notify.PREFS;
     private static final String KEY_WIDGET = "geauxweather_widget";
     private static final String KEY_STYLE = "geauxweather_widget_style";
 
