@@ -36,6 +36,8 @@ public class HurricaneAlertWorker extends Worker {
     public Result doWork() {
         try {
             if (!HurricaneAlertHelper.isEnabled(getApplicationContext())) {
+                // Stale schedule (alerts turned off): stop waking every 15 minutes.
+                HurricaneAlertHelper.cancelSchedule(getApplicationContext());
                 return Result.success();
             }
             HurricaneAlertHelper.check(getApplicationContext(), false);

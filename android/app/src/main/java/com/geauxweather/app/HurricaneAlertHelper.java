@@ -93,8 +93,9 @@ public final class HurricaneAlertHelper {
                 .build();
         PeriodicWorkRequest req = new PeriodicWorkRequest.Builder(
                 HurricaneAlertWorker.class,
-                2,
-                TimeUnit.HOURS
+                // WorkManager's minimum. Tornado warnings often last 30–45 min, so 2 h could miss them entirely.
+                15,
+                TimeUnit.MINUTES
         )
                 .setConstraints(constraints)
                 .build();
