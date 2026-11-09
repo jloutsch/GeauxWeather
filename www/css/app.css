@@ -1237,6 +1237,31 @@ button.setting-btn:active {
   border-radius: 14px;
 }
 .next-hour.hidden { display: none; }
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+.alerts-list.hidden { display: none; }
+.alert-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid #e0a030;
+  border-radius: 12px;
+}
+.alert-item.sev-extreme,
+.alert-item.sev-severe { border-left-color: #e05555; }
+.alert-item-title { font-weight: 600; }
+.alert-item-sub { font-size: 0.85rem; opacity: 0.75; }
 .next-hour-head {
   display: flex;
   align-items: baseline;

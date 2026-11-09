@@ -817,6 +817,9 @@
     renderNextHour(data);
     renderHourly(data);
     renderDaily(data);
+    if (window.PureSkySevere && window.PureSkySevere.renderActiveList) {
+      window.PureSkySevere.renderActiveList();
+    }
   }
 
   async function writeWidgetSnapshot(loc, data) {
