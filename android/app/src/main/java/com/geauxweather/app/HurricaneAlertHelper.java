@@ -164,6 +164,8 @@ public final class HurricaneAlertHelper {
         } catch (Exception ignored) {
         }
         prefs.edit().putString(KEY_SEEN, next.toString()).apply();
+        android.util.Log.i(WidgetRefreshWorker.TAG, "alerts: nws " + (nwsOk ? "ok" : "failed") + ", nhc "
+                + (nhcOk ? "ok" : "failed") + ", " + next.length() + " active" + (quiet ? " (first run, quiet)" : ""));
 
         Boolean fast = nextFastMode(stormActive(next), nwsOk && nhcOk);
         String wanted = fast == null ? null : (fast ? "on" : "off");
@@ -200,6 +202,7 @@ public final class HurricaneAlertHelper {
     }
 
     public static void showAlert(Context context, String title, String body, String tag, JSONObject detail) {
+        android.util.Log.i(WidgetRefreshWorker.TAG, "alerts: notifying " + tag);
         ensureChannel(context);
         int id = BASE_NOTIF_ID + Math.abs((tag != null ? tag : title).hashCode() % 500);
         if (detail == null) {

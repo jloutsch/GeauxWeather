@@ -25,6 +25,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.util.Log;
 import android.content.pm.PackageManager;
 import android.os.Build;
 
@@ -123,7 +124,10 @@ public final class NextHourNotifyHelper {
         SharedPreferences prefs = prefs(context);
         boolean wasWet = "1".equals(prefs.getString(KEY_WET, "0"));
         long last = parseLong(prefs.getString(KEY_LAST, "0"));
-        if (shouldNotify(wetSoon, rainingNow, wasWet, nowMs, last)) {
+        boolean notify = shouldNotify(wetSoon, rainingNow, wasWet, nowMs, last);
+        Log.i(WidgetRefreshWorker.TAG, "next-hour: wetSoon=" + wetSoon + " rainingNow=" + rainingNow
+                + " wasWet=" + wasWet + " notify=" + notify);
+        if (notify) {
             boolean snow = false;
             for (int i = 0; s != null && i < times.length; i++) {
                 if (times[i] > nowSec && times[i] - 15 * 60 < nowSec + 60 * 60 && s.optDouble(i, 0) > 0) snow = true;

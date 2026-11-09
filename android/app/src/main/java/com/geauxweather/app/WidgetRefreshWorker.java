@@ -22,6 +22,7 @@ import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.work.Constraints;
@@ -43,6 +44,8 @@ import java.util.concurrent.TimeUnit;
  * written only by the web app when it is open.
  */
 public class WidgetRefreshWorker extends Worker {
+    /** Background runs log one line each under this tag: adb logcat -s GeauxWeather */
+    static final String TAG = "GeauxWeather";
     static final String WORK_NAME = "geauxweather_widget_refresh";
     private static final String PREFS = "CapacitorStorage";
     private static final String KEY_WIDGET = "geauxweather_widget"; // same snapshot the web app writes
@@ -98,7 +101,10 @@ public class WidgetRefreshWorker extends Worker {
     static boolean refresh(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         double[] loc = HurricaneAlertHelper.resolveLocation(prefs);
-        if (loc == null) return true; // no location yet: the app has never loaded weather
+        if (loc == null) {
+            Log.i(TAG, "widget refresh: no saved location yet");
+            return true; // the app has never loaded weather
+        }
 
         JSONObject prev = null;
         try {
@@ -108,7 +114,10 @@ public class WidgetRefreshWorker extends Worker {
         }
         // The next-hour check needs this run's 15-minute forecast, so it never skips.
         if (!NextHourNotifyHelper.isEnabled(context) && prev != null
-                && System.currentTimeMillis() - prev.optLong("updatedAt", 0) < FRESH_MS) return true;
+                && System.currentTimeMillis() - prev.optLong("updatedAt", 0) < FRESH_MS) {
+            Log.i(TAG, "widget refresh: skipped, the app saved weather under 15 min ago");
+            return true;
+        }
         String units = prev != null ? prev.optString("units", "imperial") : "imperial";
 
         JSONObject json;
@@ -121,7 +130,10 @@ public class WidgetRefreshWorker extends Worker {
                             + "&forecast_days=1&timezone=auto&timeformat=unixtime%s",
                     loc[0], loc[1], "metric".equals(units) ? "" : "&temperature_unit=fahrenheit");
             String body = HurricaneAlertHelper.httpGet(url, "application/json");
-            if (body == null) return false;
+            if (body == null) {
+                Log.w(TAG, "widget refresh: download failed");
+                return false;
+            }
             json = new JSONObject(body);
             JSONObject c = json.getJSONObject("current");
             JSONObject d = json.optJSONObject("daily");
@@ -139,7 +151,10 @@ public class WidgetRefreshWorker extends Worker {
             snap.put("units", units);
             snap.put("updatedAt", System.currentTimeMillis());
             prefs.edit().putString(KEY_WIDGET, snap.toString()).apply();
+            Log.i(TAG, "widget refresh: " + snap.optString("temp") + " " + snap.optString("condition")
+                    + (isDay == 1 ? " (day)" : " (night)"));
         } catch (Exception e) {
+            Log.w(TAG, "widget refresh: failed: " + e);
             return false;
         }
         GeauxWeatherWidgetProvider.refreshAll(context); // also redraws the clock widget
@@ -147,7 +162,8 @@ public class WidgetRefreshWorker extends Worker {
         try {
             // After the redraw, so a notification failure can't leave the widgets stale
             NextHourNotifyHelper.check(context, json, HurricaneAlertHelper.resolveLocationLabel(prefs));
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Log.w(TAG, "next-hour check failed: " + e);
         }
         return true;
     }
