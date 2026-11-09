@@ -36,7 +36,7 @@ import java.util.Locale;
 
 /**
  * "Today: 57°/44° · Partly cloudy" / "Rain up to 70% after 3 PM · Stoneham": every morning at the chosen
- * hour. Same daily scheduling as UvNotifyHelper; follows the app's units, clock and forecast model.
+ * hour (shown until noon). Same daily scheduling as UvNotifyHelper; follows the app's units, clock and forecast model.
  */
 public final class SummaryNotifyHelper {
 
@@ -47,8 +47,8 @@ public final class SummaryNotifyHelper {
     private static final String KEY_HOUR = "geauxweather_summary_hour";      // "6" … "9"
     private static final String KEY_LAST = "geauxweather_summary_last";      // date already notified for
     static final int DEFAULT_HOUR = 7;
-    /** A run more than this many hours after the chosen one (phone off, no network) skips the day. */
-    static final int LATE_HOURS = 3;
+    /** No summary from noon on: a run held back by Doze until the phone is first used still counts before then. */
+    static final int LAST_HOUR = 12;
     /** Rain chance worth mentioning, and the start of "after 3 PM". */
     static final int MENTION = 30;
 
@@ -83,9 +83,8 @@ public final class SummaryNotifyHelper {
     public static boolean check(Context context) {
         if (!isEnabled(context)) return true;
         SharedPreferences prefs = prefs(context);
-        int hour = DailyNotifyWorker.intPref(prefs, KEY_HOUR, DEFAULT_HOUR);
         int hourNow = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-        if (hourNow < hour || hourNow >= hour + LATE_HOURS) return true;
+        if (!inWindow(hourNow, DailyNotifyWorker.intPref(prefs, KEY_HOUR, DEFAULT_HOUR))) return true;
 
         double[] loc = HurricaneAlertHelper.resolveLocation(prefs);
         if (loc == null) return true;
@@ -130,12 +129,13 @@ public final class SummaryNotifyHelper {
                 prob[i] = p.isNull(i) ? -1 : p.getInt(i);
                 snow[i] = s == null || s.isNull(i) ? 0 : s.getDouble(i);
             }
-            String rain = precipText(times, prob, snow, System.currentTimeMillis() / 1000, offset, use24Hour(context, prefs));
+            String rain = precipText(times, prob, snow, System.currentTimeMillis() / 1000, offset,
+                    NextHourNotifyHelper.timeFormat(context, prefs.getString("geauxweather_clock", "auto")));
             String label = HurricaneAlertHelper.resolveLocationLabel(prefs);
             String text = rain == null ? label : rain + " · " + label;
             Log.i(WidgetRefreshWorker.TAG, "summary: " + title + " / " + text);
             if (Notify.post(context, CHANNEL_ID, "Daily summary", "Today's forecast, once a day at the time you choose",
-                    NOTIF_ID, R.drawable.ic_stat_sunny, title, text, new Intent(context, MainActivity.class))) {
+                    NOTIF_ID, icon(daily.getJSONArray("weather_code").optInt(0, -1)), title, text, new Intent(context, MainActivity.class))) {
                 prefs.edit().putString(KEY_LAST, today).apply();
             }
             return true;
@@ -145,11 +145,25 @@ public final class SummaryNotifyHelper {
         }
     }
 
-    /** "Today: 57°/44° · Partly cloudy" (the condition without its emoji). */
+    /** From the chosen hour until noon. */
+    static boolean inWindow(int hourNow, int hour) {
+        return hourNow >= hour && hourNow < LAST_HOUR;
+    }
+
+    /** "Today: 57°/44° · Partly cloudy" (the condition without its emoji; none for an unknown code). */
     static String title(double high, double low, int code) {
+        String t = "Today: " + Math.round(high) + "°/" + Math.round(low) + "°";
         String cond = WidgetRefreshWorker.condition(code, true);
         int space = cond.indexOf(' ');
-        return "Today: " + Math.round(high) + "°/" + Math.round(low) + "° · " + (space > 0 ? cond.substring(space + 1) : cond);
+        String text = space > 0 ? cond.substring(space + 1) : "";
+        return text.isEmpty() || "—".equals(text) ? t : t + " · " + text;
+    }
+
+    /** Status-bar icon for the day's weather code (WMO): rain/snow/storms, clouds/fog, or sun. */
+    static int icon(int code) {
+        if (code >= 51) return R.drawable.ic_stat_rain;
+        if (code == 2 || code == 3 || code == 45 || code == 48) return R.drawable.ic_stat_cloudy;
+        return R.drawable.ic_stat_sunny;
     }
 
     /**
@@ -157,7 +171,7 @@ public final class SummaryNotifyHelper {
      * after 3 PM". Hours are the location's local time. Null when the forecast has no chances.
      * @param prob per hour, -1 when missing
      */
-    static String precipText(long[] times, int[] prob, double[] snow, long nowSec, long offsetSec, boolean h24) {
+    static String precipText(long[] times, int[] prob, double[] snow, long nowSec, long offsetSec, java.text.DateFormat clock) {
         int peak = -1;
         int start = -1;
         int first = -1;
@@ -176,22 +190,9 @@ public final class SummaryNotifyHelper {
         if (peak < MENTION) return "Rain unlikely";
         String word = snowy && rainy ? "Rain or snow" : snowy ? "Snow" : "Rain";
         String text = word + " up to " + peak + "%";
-        return start == first ? text : text + " after " + hourText(times[start] + offsetSec, h24);
-    }
-
-    /** Local seconds → "3 PM" or "15:00". */
-    static String hourText(long localSec, boolean h24) {
-        int h = (int) Math.floorMod(localSec / 3600, 24L);
-        if (h24) return String.format(Locale.US, "%02d:00", h);
-        return (h % 12 == 0 ? 12 : h % 12) + (h < 12 ? " AM" : " PM");
-    }
-
-    /** App Settings → Time: "12" / "24" force a format; anything else follows the phone. */
-    private static boolean use24Hour(Context context, SharedPreferences prefs) {
-        String pref = prefs.getString("geauxweather_clock", "auto");
-        if ("12".equals(pref)) return false;
-        if ("24".equals(pref)) return true;
-        return android.text.format.DateFormat.is24HourFormat(context);
+        if (start == first) return text;
+        clock.setTimeZone(java.util.TimeZone.getTimeZone("UTC")); // times are shifted to the location's clock
+        return text + " after " + clock.format(new Date((times[start] + offsetSec) * 1000));
     }
 
     private static SharedPreferences prefs(Context context) {
