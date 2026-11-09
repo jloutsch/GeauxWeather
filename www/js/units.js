@@ -140,7 +140,27 @@
     return (h % 12 || 12) + (h < 12 ? 'a' : 'p');
   }
 
+  /**
+   * Settings → Background updates. The job runs every intervalMin (15/30/60); more than twice that plus
+   * 15 minutes without a run (since sinceMs, when it was switched on, if it never ran) means it is overdue.
+   * @returns {{text: string, stale: boolean}}
+   */
+  function bgStatus(nowMs, lastRunMs, intervalMin, alertsAtMs, sinceMs) {
+    if (!intervalMin) return { text: 'Off (no widget, next-hour or alert checks)', stale: false };
+    const when = (ms) => {
+      const d = new Date(ms);
+      const sameDay = new Date(nowMs).toDateString() === d.toDateString();
+      return d.toLocaleString([], timeOpts(sameDay ? { hour: 'numeric', minute: '2-digit' } : { weekday: 'short', hour: 'numeric', minute: '2-digit' }));
+    };
+    const parts = [lastRunMs ? 'last ran ' + when(lastRunMs) : 'not run yet', 'every ' + intervalMin + ' min'];
+    if (alertsAtMs) parts.push('alerts checked ' + when(alertsAtMs));
+    const from = lastRunMs || sinceMs;
+    const stale = !!from && nowMs - from > (2 * intervalMin + 15) * 60000;
+    return { text: parts.join(' · '), stale: stale };
+  }
+
   global.GeauxUnits = {
+    bgStatus: bgStatus,
     KEYS: KEYS,
     get: get,
     set: set,

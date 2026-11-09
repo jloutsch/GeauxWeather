@@ -308,8 +308,38 @@
     );
   }
 
+  /** Settings → Background updates: when the background job last ran, from what it saves natively. */
+  async function showBgStatus() {
+    const el = document.getElementById('bg-status');
+    const prefs = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
+    if (!el || !prefs) return;
+    try {
+      const get = async (k) => (await prefs.get({ key: k })).value;
+      const s = U.bgStatus(
+        Date.now(),
+        Number(await get('geauxweather_bg_last_run')) || 0,
+        Number(await get('geauxweather_bg_interval')) || 0,
+        Number(await get('geauxweather_alert_last_check')) || 0,
+        Number(await get('geauxweather_bg_since')) || 0
+      );
+      // Android also holds it while the phone sleeps (Doze) or is offline, so the advice is conditional
+      const text = s.stale
+        ? s.text + ' — overdue. Android waits while the phone is asleep or offline; if this stays while you use the phone, set GeauxWeather’s battery use to Unrestricted'
+        : s.text;
+      if (el.textContent !== text) el.textContent = text; // aria-live: announce changes only
+      el.classList.toggle('bg-stale', s.stale);
+    } catch (e) {
+      console.warn('background status skipped', e);
+    }
+  }
+  showBgStatus();
+  document.querySelectorAll('[data-screen="settings"]').forEach((b) => b.addEventListener('click', showBgStatus));
+
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') syncPhoneClock(); // 24-hour switch may have changed
+    if (document.visibilityState === 'visible') {
+      syncPhoneClock(); // 24-hour switch may have changed
+      showBgStatus();
+    }
   });
 
   window.GeauxSettingsExtra = {

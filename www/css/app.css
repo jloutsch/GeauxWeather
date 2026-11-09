@@ -865,6 +865,11 @@ body.sky-mood-default {
   max-width: 62%;
 }
 
+/* Background-updates line when the job looks paused (after .muted would win without the double class) */
+.muted.bg-stale {
+  color: #f0c14a;
+}
+
 /* Settings dropdowns (select-menu.js): the native <select> stays hidden as the source of truth */
 .gw-native-select {
   display: none !important;
