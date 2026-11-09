@@ -78,10 +78,11 @@
               <span class="sun-label">Sunset</span>
               <span class="sun-value" id="sunset-now">—</span>
             </div>
-            <div class="sun-time" id="moon-now" role="group" aria-label="Moon">
-              <span class="sun-label">Moon</span>
-              <span class="sun-value" id="moon-value">—</span>
-              <span class="sun-label moon-name" id="moon-name"></span>
+            <div class="sun-time" id="moon-now" role="img" aria-label="Moon">
+              <!-- Read once via the aria-label ("Moon: New moon, 0% lit"), not item by item -->
+              <span class="sun-label" aria-hidden="true">Moon</span>
+              <span class="sun-value" id="moon-value" aria-hidden="true">—</span>
+              <span class="sun-label moon-name" id="moon-name" aria-hidden="true"></span>
             </div>
           </div>
         </div>
