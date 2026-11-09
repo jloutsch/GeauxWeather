@@ -1816,7 +1816,50 @@
     });
   })();
 
+  /**
+   * Settings the Android side acts on are saved twice: Capacitor Preferences (read by native code)
+   * and localStorage (read by these screens). Preferences is the source of truth; copy it into
+   * localStorage and the controls at startup, so a cleared WebView never shows a switch "off" that
+   * is still on natively.
+   */
+  const NATIVE_SETTINGS = [
+    // [Preferences key, localStorage key, control id]
+    ['geauxweather_hurricane_alerts', 'geauxweather_hurricane_alerts', 'hurricane-alerts-toggle'],
+    ['geauxweather_alert_level', 'geauxweather_alert_level', 'alert-level-select'],
+    ['geauxweather_nexthour_notify', 'geauxweather_nexthour_notify', 'nexthour-notify-toggle'],
+    ['geauxweather_precip_notify', 'geauxweather_precip_notify', 'precip-notify-toggle'],
+    ['geauxweather_precip_threshold', 'geauxweather_precip_threshold', 'precip-threshold'],
+    ['geauxweather_precip_hour', 'geauxweather_precip_hour', 'precip-hour'],
+    ['geauxweather_uv_notify', 'geauxweather_uv_notify', 'uv-notify-toggle'],
+    ['geauxweather_uv_level', 'geauxweather_uv_level', 'uv-level'],
+    ['geauxweather_uv_hour', 'geauxweather_uv_hour', 'uv-hour'],
+    ['geauxweather_status_notification', 'geauxweather_status_notification', 'status-notif-toggle'],
+    ['geauxweather_model', 'forecast_model', 'forecast-model'],
+    ['geauxweather_clock', 'unit_clock', 'unit-clock'],
+    ['geauxweather_widget_style', 'geauxweather_widget_style', null], // controls set by loadPrefs()
+  ];
+
+  async function syncSettingsFromNative() {
+    const prefs = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences;
+    if (!prefs || !(window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) return;
+    try {
+      const values = await Promise.all(NATIVE_SETTINGS.map((s) => prefs.get({ key: s[0] })));
+      NATIVE_SETTINGS.forEach(function (s, i) {
+        const v = values[i] && values[i].value;
+        if (v == null) return; // never set natively: keep what this screen has
+        localStorage.setItem(s[1], v);
+        const el = s[2] && document.getElementById(s[2]);
+        if (!el) return;
+        if (el.type === 'checkbox') el.checked = s[0] === 'geauxweather_status_notification' ? v !== 'off' : v === 'on';
+        else el.value = v;
+      });
+    } catch (e) {
+      console.warn('settings sync from Preferences skipped', e);
+    }
+  }
+
   async function boot() {
+    await syncSettingsFromNative(); // before anything reads these settings (first forecast uses the model)
     loadPrefs();
     syncPhoneClock();
     showScreen('today');
