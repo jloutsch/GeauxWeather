@@ -1,0 +1,51 @@
+# Daily check that Open-Meteo, NWS, NHC, RainViewer, USGS and Nominatim still return the fields the app
+# reads (scripts/check-apis.mjs). A failure opens an issue listing what changed, so a silent API change
+# is noticed before users report a broken screen.
+name: Weather API check
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # daily, 12:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/check-apis.mjs
+      - .github/workflows/api-check.yml
+      - www/js/weather.js
+      - www/js/units.js
+
+permissions:
+  contents: read
+  issues: write # report a failed scheduled check
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Check the weather APIs
+        run: |
+          set -o pipefail
+          node scripts/check-apis.mjs | tee api-check.txt
+
+      - name: Report a failed scheduled check
+        if: failure() && github.event_name != 'pull_request'
+        run: |
+          title="Weather API check failed"
+          # Backticks below are literal Markdown (a code block in the issue).
+          # shellcheck disable=SC2016
+          body="$(printf 'The daily API check failed on %s.\n\n```\n%s\n```\n\nRun: %s/%s/actions/runs/%s' "$(date -u +%F)" "$(cat api-check.txt)" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number -q '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
