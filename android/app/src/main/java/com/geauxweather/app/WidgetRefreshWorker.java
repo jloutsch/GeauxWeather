@@ -49,7 +49,7 @@ public class WidgetRefreshWorker extends Worker {
     /** Background runs log one line each under this tag: adb logcat -s GeauxWeather */
     static final String TAG = "GeauxWeather";
     static final String WORK_NAME = "geauxweather_widget_refresh";
-    private static final String PREFS = "CapacitorStorage";
+    private static final String PREFS = Notify.PREFS;
     private static final String KEY_WIDGET = "geauxweather_widget"; // same snapshot the web app writes
     /** Skip the download if the app wrote the snapshot this recently. */
     static final long FRESH_MS = 15 * 60 * 1000L;

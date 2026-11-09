@@ -18,19 +18,10 @@
 
 package com.geauxweather.app;
 
-import android.Manifest;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.util.Log;
-import android.content.pm.PackageManager;
-import android.os.Build;
-
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -42,7 +33,7 @@ import java.util.Date;
  * from the same Open-Meteo download, using the 15-minute forecast.
  */
 public final class NextHourNotifyHelper {
-    private static final String PREFS = "CapacitorStorage";
+    private static final String PREFS = Notify.PREFS;
     private static final String KEY_ENABLED = "geauxweather_nexthour_notify"; // "on" / "off"
     private static final String KEY_WET = "geauxweather_nexthour_wet";        // last check saw rain now or soon
     private static final String KEY_LAST = "geauxweather_nexthour_last";      // epoch ms of last notification
@@ -132,7 +123,9 @@ public final class NextHourNotifyHelper {
                 if (times[i] > nowSec && times[i] - 15 * 60 < nowSec + 60 * 60 && s.optDouble(i, 0) > 0) snow = true;
             }
             String clock = timeFormat(context, prefs.getString("geauxweather_clock", "auto")).format(new Date(start * 1000));
-            if (post(context, title(snow, start, nowSec, clock), placeLabel)) {
+            if (Notify.post(context, CHANNEL_ID, "Rain or snow soon", "Rain or snow expected to start within the next hour",
+                    NOTIF_ID, R.drawable.ic_stat_rain, title(snow, start, nowSec, clock), placeLabel,
+                    new Intent(context, MainActivity.class))) {
                 prefs.edit().putString(KEY_LAST, String.valueOf(nowMs)).apply();
             }
         }
@@ -144,37 +137,6 @@ public final class NextHourNotifyHelper {
         if ("12".equals(pref)) return new java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault());
         if ("24".equals(pref)) return new java.text.SimpleDateFormat("H:mm", java.util.Locale.getDefault());
         return android.text.format.DateFormat.getTimeFormat(context);
-    }
-
-    private static boolean post(Context context, String title, String text) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                        != PackageManager.PERMISSION_GRANTED) {
-            return false;
-        }
-        ensureChannel(context);
-        Intent open = new Intent(context, MainActivity.class)
-                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi = PendingIntent.getActivity(context, NOTIF_ID, open,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        NotificationCompat.Builder b = new NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_stat_rain)
-                .setContentTitle(title)
-                .setContentText(text)
-                .setAutoCancel(true)
-                .setContentIntent(pi)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
-        NotificationManagerCompat.from(context).notify(NOTIF_ID, b.build());
-        return true;
-    }
-
-    private static void ensureChannel(Context context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-        NotificationChannel ch = new NotificationChannel(
-                CHANNEL_ID, "Rain or snow soon", NotificationManager.IMPORTANCE_DEFAULT);
-        ch.setDescription("Rain or snow expected to start within the next hour");
-        NotificationManager nm = context.getSystemService(NotificationManager.class);
-        if (nm != null) nm.createNotificationChannel(ch);
     }
 
     private static long parseLong(String s) {

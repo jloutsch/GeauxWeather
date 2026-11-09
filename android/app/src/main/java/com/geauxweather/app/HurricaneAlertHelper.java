@@ -51,7 +51,7 @@ public final class HurricaneAlertHelper {
 
     static final String CHANNEL_ID = "geauxweather_severe";
     static final String WORK_NAME = "geauxweather_severe_alerts";
-    private static final String PREFS = "CapacitorStorage";
+    private static final String PREFS = Notify.PREFS;
     private static final String KEY_ENABLED = "geauxweather_hurricane_alerts";
     private static final String KEY_SEEN = "geauxweather_severe_seen_native";
     private static final String KEY_LOC = "geauxweather_location";

@@ -18,19 +18,11 @@
 
 package com.geauxweather.app;
 
-import android.Manifest;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.os.Build;
 import android.util.Log;
 
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import androidx.work.BackoffPolicy;
 import androidx.work.Constraints;
 import androidx.work.ExistingWorkPolicy;
@@ -53,7 +45,7 @@ public final class UvNotifyHelper {
     static final String WORK_NAME = "geauxweather_uv_notify";
     private static final String CHANNEL_ID = "geauxweather_uv";
     private static final int NOTIF_ID = 8300;
-    private static final String PREFS = "CapacitorStorage";
+    private static final String PREFS = Notify.PREFS;
     private static final String KEY_ENABLED = "geauxweather_uv_notify"; // "on" / "off"
     private static final String KEY_LEVEL = "geauxweather_uv_level";    // "6" / "8" / "11"
     private static final String KEY_HOUR = "geauxweather_uv_hour";      // "7" / "8" / "9"
@@ -128,7 +120,8 @@ public final class UvNotifyHelper {
                     + (title == null ? ", no notification" : ", notifying"));
             if (title == null) return true;
             String text = HurricaneAlertHelper.resolveLocationLabel(prefs) + " · strongest around midday";
-            if (post(context, title, text)) prefs.edit().putString(KEY_LAST, today).apply();
+            if (Notify.post(context, CHANNEL_ID, "High UV", "UV index forecast to reach your chosen level today",
+                    NOTIF_ID, R.drawable.ic_stat_sunny, title, text, new Intent(context, MainActivity.class))) prefs.edit().putString(KEY_LAST, today).apply();
             return true;
         } catch (Exception e) {
             Log.w(WidgetRefreshWorker.TAG, "uv: failed: " + e);
@@ -142,34 +135,6 @@ public final class UvNotifyHelper {
         if (n < level) return null;
         String category = n >= 11 ? "Extreme" : n >= 8 ? "Very high" : n >= 6 ? "High" : n >= 3 ? "Moderate" : "Low";
         return category + " UV today (" + n + ")";
-    }
-
-    // shortcut: third copy of the posting code (also PrecipNotifyHelper, NextHourNotifyHelper); share it in #28
-    private static boolean post(Context context, String title, String text) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                        != PackageManager.PERMISSION_GRANTED) {
-            return false;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "High UV", NotificationManager.IMPORTANCE_DEFAULT);
-            ch.setDescription("UV index forecast to reach your chosen level today");
-            NotificationManager nm = context.getSystemService(NotificationManager.class);
-            if (nm != null) nm.createNotificationChannel(ch);
-        }
-        Intent open = new Intent(context, MainActivity.class)
-                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi = PendingIntent.getActivity(context, NOTIF_ID, open,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        NotificationCompat.Builder b = new NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_stat_sunny)
-                .setContentTitle(title)
-                .setContentText(text)
-                .setAutoCancel(true)
-                .setContentIntent(pi)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
-        NotificationManagerCompat.from(context).notify(NOTIF_ID, b.build());
-        return true;
     }
 
     private static int parseInt(String s, int fallback) {

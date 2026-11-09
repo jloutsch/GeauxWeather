@@ -18,19 +18,11 @@
 
 package com.geauxweather.app;
 
-import android.Manifest;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.util.Log;
-import android.content.pm.PackageManager;
-import android.os.Build;
 
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import androidx.work.BackoffPolicy;
 import androidx.work.Constraints;
 import androidx.work.ExistingWorkPolicy;
@@ -56,7 +48,7 @@ public final class PrecipNotifyHelper {
     static final String EXTRA_OPEN_SCREEN = "geauxweather_open_screen";
     private static final String CHANNEL_ID = "geauxweather_precip";
     private static final int NOTIF_ID = 8100;
-    private static final String PREFS = "CapacitorStorage";
+    private static final String PREFS = Notify.PREFS;
     private static final String KEY_ENABLED = "geauxweather_precip_notify";      // "on" / "off"
     private static final String KEY_THRESHOLD = "geauxweather_precip_threshold"; // "50" / "70" / "90"
     private static final String KEY_HOUR = "geauxweather_precip_hour";           // "15" / "18" / "21"
@@ -153,7 +145,9 @@ public final class PrecipNotifyHelper {
                     + (title == null ? ", no notification" : ", notifying"));
             if (title == null) return true;
             String text = prob + "% chance · " + HurricaneAlertHelper.resolveLocationLabel(prefs);
-            if (post(context, title, text)) {
+            if (Notify.post(context, CHANNEL_ID, "Precipitation forecast",
+                    "Rain or snow likely tomorrow, once a day at the time you choose", NOTIF_ID, R.drawable.ic_stat_rain,
+                    title, text, new Intent(context, MainActivity.class).putExtra(EXTRA_OPEN_SCREEN, "10day"))) {
                 prefs.edit().putString(KEY_LAST, tomorrow).apply();
             }
             return true;
@@ -194,38 +188,6 @@ public final class PrecipNotifyHelper {
         } catch (Exception e) {
             return fallback;
         }
-    }
-
-    private static boolean post(Context context, String title, String text) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                        != PackageManager.PERMISSION_GRANTED) {
-            return false;
-        }
-        ensureChannel(context);
-        Intent open = new Intent(context, MainActivity.class)
-                .putExtra(EXTRA_OPEN_SCREEN, "10day")
-                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi = PendingIntent.getActivity(context, NOTIF_ID, open,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        NotificationCompat.Builder b = new NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_stat_rain)
-                .setContentTitle(title)
-                .setContentText(text)
-                .setAutoCancel(true)
-                .setContentIntent(pi)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
-        NotificationManagerCompat.from(context).notify(NOTIF_ID, b.build());
-        return true;
-    }
-
-    private static void ensureChannel(Context context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-        NotificationChannel ch = new NotificationChannel(
-                CHANNEL_ID, "Precipitation forecast", NotificationManager.IMPORTANCE_DEFAULT);
-        ch.setDescription("Rain or snow likely tomorrow, once a day at the time you choose");
-        NotificationManager nm = context.getSystemService(NotificationManager.class);
-        if (nm != null) nm.createNotificationChannel(ch);
     }
 
     private static SharedPreferences prefs(Context context) {
