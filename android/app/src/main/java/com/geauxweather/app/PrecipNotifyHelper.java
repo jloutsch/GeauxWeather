@@ -83,18 +83,8 @@ public final class PrecipNotifyHelper {
      * without drift and without hourly wake-ups.
      */
     static Operation scheduleNext(Context context, ExistingWorkPolicy policy) {
-        int hour = parseInt(prefs(context).getString(KEY_HOUR, "18"), 18);
-        long delayMs = millisUntilNext(System.currentTimeMillis(), hour);
-        Constraints constraints = new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build();
-        OneTimeWorkRequest req = new OneTimeWorkRequest.Builder(DailyNotifyWorker.class)
-                .setInputData(DailyNotifyWorker.input(DailyNotifyWorker.PRECIP))
-                .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
-                .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
-                .build();
-        return WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, policy, req);
+        return DailyNotifyWorker.enqueue(context, DailyNotifyWorker.PRECIP, WORK_NAME,
+                DailyNotifyWorker.intPref(prefs(context), KEY_HOUR, 18), policy);
     }
 
     /** Milliseconds from now until the next HH:00 local time (tomorrow if already past). */
@@ -117,7 +107,7 @@ public final class PrecipNotifyHelper {
     public static boolean check(Context context) {
         if (!isEnabled(context)) return true;
         SharedPreferences prefs = prefs(context);
-        int notifyHour = parseInt(prefs.getString(KEY_HOUR, "18"), 18);
+        int notifyHour = DailyNotifyWorker.intPref(prefs, KEY_HOUR, 18);
         if (Calendar.getInstance().get(Calendar.HOUR_OF_DAY) < notifyHour) return true;
 
         double[] loc = HurricaneAlertHelper.resolveLocation(prefs);
@@ -140,7 +130,7 @@ public final class PrecipNotifyHelper {
             int prob = daily.getJSONArray("precipitation_probability_max").optInt(1, 0);
             double snowCm = optDouble(daily.optJSONArray("snowfall_sum"));
             double rainMm = optDouble(daily.optJSONArray("rain_sum")) + optDouble(daily.optJSONArray("showers_sum"));
-            int threshold = parseInt(prefs.getString(KEY_THRESHOLD, "70"), 70);
+            int threshold = DailyNotifyWorker.intPref(prefs, KEY_THRESHOLD, 70);
 
             String title = title(prob, snowCm, rainMm, threshold);
             Log.i(WidgetRefreshWorker.TAG, "tomorrow precip: " + prob + "% (threshold " + threshold + "%)"
@@ -182,14 +172,6 @@ public final class PrecipNotifyHelper {
     private static double optDouble(JSONArray arr) {
         if (arr == null || arr.isNull(1)) return 0;
         return arr.optDouble(1, 0);
-    }
-
-    private static int parseInt(String s, int fallback) {
-        try {
-            return Integer.parseInt(s);
-        } catch (Exception e) {
-            return fallback;
-        }
     }
 
     private static SharedPreferences prefs(Context context) {

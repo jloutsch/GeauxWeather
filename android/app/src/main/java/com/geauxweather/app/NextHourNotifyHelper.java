@@ -133,7 +133,7 @@ public final class NextHourNotifyHelper {
     }
 
     /** App Settings → Time: "12" / "24" force a format; anything else follows the phone. */
-    private static java.text.DateFormat timeFormat(Context context, String pref) {
+    static java.text.DateFormat timeFormat(Context context, String pref) {
         if ("12".equals(pref)) return new java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault());
         if ("24".equals(pref)) return new java.text.SimpleDateFormat("H:mm", java.util.Locale.getDefault());
         return android.text.format.DateFormat.getTimeFormat(context);
