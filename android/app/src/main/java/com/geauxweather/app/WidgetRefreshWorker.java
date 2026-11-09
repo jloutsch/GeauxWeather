@@ -219,7 +219,8 @@ public class WidgetRefreshWorker extends Worker {
     }
 
     /** Settings → Forecast model choices besides Best match; must match MODELS in www/js/weather.js (tested). */
-    static final String[] MODELS = {"ecmwf_ifs025", "gfs_seamless", "gem_seamless"};
+    static final String[] MODELS = {"ecmwf_ifs025", "gfs_seamless", "gem_seamless", "icon_seamless", "ukmo_seamless",
+            "meteofrance_seamless", "jma_seamless"};
 
     /** @return the chosen Open-Meteo model, or null for Best match (and for anything unexpected). */
     static String forecastModel(String pref) {
