@@ -182,8 +182,8 @@ public class WidgetRefreshWorker extends Worker {
             json = new JSONObject(body);
             if (model != null) {
                 // Same split as the app: today's high/low from the chosen model, "now" and next hour from Best match
-                pickModel(json, "daily", model);
-                pickModel(json, "minutely_15", "best_match");
+                pickModel(json, "daily", model, "best_match");
+                pickModel(json, "minutely_15", "best_match", null);
             }
             JSONObject c = json.getJSONObject("current");
             JSONObject d = json.optJSONObject("daily");
@@ -228,8 +228,12 @@ public class WidgetRefreshWorker extends Worker {
         return null;
     }
 
-    /** Multi-model responses suffix each column with its model; keep one model's under the plain names. */
-    private static void pickModel(JSONObject json, String key, String model) throws org.json.JSONException {
+    /**
+     * Multi-model responses suffix each column with its model; keep one model's under the plain names.
+     * Values that model lacks (null) come from {@code fallback}'s column when given, like pickModel in
+     * www/js/weather.js (e.g. JMA and Météo-France have no rain chance, none of the extras has UV).
+     */
+    static void pickModel(JSONObject json, String key, String model, String fallback) throws org.json.JSONException {
         JSONObject block = json.optJSONObject(key);
         if (block == null) return;
         String suffix = "_" + model;
@@ -238,7 +242,17 @@ public class WidgetRefreshWorker extends Worker {
         java.util.Iterator<String> it = block.keys();
         while (it.hasNext()) {
             String k = it.next();
-            if (k.endsWith(suffix)) out.put(k.substring(0, k.length() - suffix.length()), block.get(k));
+            if (!k.endsWith(suffix)) continue;
+            String name = k.substring(0, k.length() - suffix.length());
+            Object v = block.get(k);
+            org.json.JSONArray alt = fallback == null ? null : block.optJSONArray(name + "_" + fallback);
+            if (v instanceof org.json.JSONArray && alt != null) {
+                org.json.JSONArray own = (org.json.JSONArray) v;
+                org.json.JSONArray merged = new org.json.JSONArray();
+                for (int i = 0; i < own.length(); i++) merged.put(own.isNull(i) ? alt.opt(i) : own.opt(i));
+                v = merged;
+            }
+            out.put(name, v);
         }
         json.put(key, out);
     }

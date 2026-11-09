@@ -123,7 +123,10 @@ public final class PrecipNotifyHelper {
                 Log.w(WidgetRefreshWorker.TAG, "tomorrow precip: download failed");
                 return false;
             }
-            JSONObject daily = new JSONObject(body).getJSONObject("daily");
+            JSONObject root = new JSONObject(body);
+            String m = WidgetRefreshWorker.forecastModel(prefs.getString("geauxweather_model", null));
+            if (m != null) WidgetRefreshWorker.pickModel(root, "daily", m, "best_match"); // rain chance JMA/Météo-France lack
+            JSONObject daily = root.getJSONObject("daily");
             String tomorrow = daily.getJSONArray("time").getString(1);
             if (tomorrow.equals(prefs.getString(KEY_LAST, null))) return true;
 
@@ -163,10 +166,10 @@ public final class PrecipNotifyHelper {
         return "Precipitation likely tomorrow";
     }
 
-    /** Settings → Forecast model; one model, so the response keeps plain column names. */
+    /** Settings → Forecast model, fetched with Best match so values the model lacks can be filled in. */
     private static String model(SharedPreferences prefs) {
         String m = WidgetRefreshWorker.forecastModel(prefs.getString("geauxweather_model", null));
-        return m == null ? "" : "&models=" + m;
+        return m == null ? "" : "&models=best_match," + m;
     }
 
     private static double optDouble(JSONArray arr) {
