@@ -55,10 +55,12 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         AppWidgetManager mgr = AppWidgetManager.getInstance(context);
         ComponentName cn = new ComponentName(context, GeauxWeatherWidgetProvider.class);
         int[] ids = mgr.getAppWidgetIds(cn);
-        if (ids == null || ids.length == 0) return;
-        for (int id : ids) {
-            updateAppWidget(context, mgr, id);
+        if (ids != null) {
+            for (int id : ids) {
+                updateAppWidget(context, mgr, id);
+            }
         }
+        GeauxClockWidgetProvider.refreshAll(context);
     }
 
     static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
@@ -113,7 +115,7 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         views.setTextColor(R.id.widget_hilow, dim);
     }
 
-    private static int withAlpha(int color, int opacity0to100) {
+    static int withAlpha(int color, int opacity0to100) {
         int a = Math.max(0, Math.min(100, opacity0to100));
         int alpha = Math.round(a * 255f / 100f);
         return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
@@ -135,7 +137,7 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    private static class Style {
+    static class Style {
         final int bgOpacity; // 0–100
         final int bgColor;   // RGB
         final int textColor; // RGB
@@ -147,7 +149,7 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    private static Style readStyle(Context context) {
+    static Style readStyle(Context context) {
         // Default: fully transparent, white text (1.0.7 look)
         Style fallback = new Style(0, Color.parseColor("#141A22"), Color.WHITE);
         try {
@@ -164,22 +166,26 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    private static class Snapshot {
+    static class Snapshot {
         final String location;
         final String temp;
         final String condition;
         final String hilow;
+        final int weatherCode; // WMO code, -1 if unknown
+        final int isDay;       // 1 day, 0 night, -1 unknown (snapshot written before is_day existed)
 
-        Snapshot(String location, String temp, String condition, String hilow) {
+        Snapshot(String location, String temp, String condition, String hilow, int weatherCode, int isDay) {
             this.location = location;
             this.temp = temp;
             this.condition = condition;
             this.hilow = hilow;
+            this.weatherCode = weatherCode;
+            this.isDay = isDay;
         }
     }
 
-    private static Snapshot readSnapshot(Context context) {
-        Snapshot fallback = new Snapshot("GeauxWeather", "—°", "Open app to load", "H —°  L —°");
+    static Snapshot readSnapshot(Context context) {
+        Snapshot fallback = new Snapshot("GeauxWeather", "—°", "Open app to load", "H —°  L —°", -1, -1);
         try {
             SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
             String raw = prefs.getString(KEY_WIDGET, null);
@@ -190,7 +196,8 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
             String cond = o.optString("condition", "—");
             String high = o.optString("high", "—");
             String low = o.optString("low", "—");
-            return new Snapshot(loc, temp, cond, "H " + high + "  L " + low);
+            return new Snapshot(loc, temp, cond, "H " + high + "  L " + low,
+                    o.optInt("weatherCode", -1), o.optInt("isDay", -1));
         } catch (Exception e) {
             return fallback;
         }

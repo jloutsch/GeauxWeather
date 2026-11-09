@@ -18,12 +18,14 @@
 
 package com.geauxweather.app;
 
+import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -48,13 +50,24 @@ public final class WeatherNotificationHelper {
     private static final int NOTIF_ID = 42;
     private static final String PREFS_FILE = "CapacitorStorage";
     private static final String KEY_WIDGET = "geauxweather_widget";
+    /** "off" hides the status-bar notification; missing or "on" shows it. Set from Settings. */
+    private static final String KEY_ENABLED = "geauxweather_status_notification";
 
     private WeatherNotificationHelper() {}
 
     public static void update(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
+        if ("off".equals(prefs.getString(KEY_ENABLED, "on"))) {
+            cancel(context);
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
         ensureChannel(context);
 
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
         String raw = prefs.getString(KEY_WIDGET, null);
         if (raw == null || raw.isEmpty()) {
             return;
