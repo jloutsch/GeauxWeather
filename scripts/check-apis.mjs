@@ -58,6 +58,16 @@ async function main() {
   }
 
   const tasks = {
+    'open-meteo air quality hourly (AQI warning)': async () => {
+      const j = await getJson(
+        'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=42.48&longitude=-71.1&hourly=us_aqi,european_aqi&forecast_days=1&timezone=auto&timeformat=unixtime'
+      );
+      const h = j.hourly || {};
+      check('air quality hourly.time', Array.isArray(h.time) && h.time.length >= 24, 'missing');
+      check('air quality hourly.us_aqi', Array.isArray(h.us_aqi) && h.us_aqi.some((v) => v != null), 'missing or all null');
+      check('air quality hourly.european_aqi', Array.isArray(h.european_aqi) && h.european_aqi.some((v) => v != null), 'missing or all null');
+      check('air quality utc_offset_seconds', typeof j.utc_offset_seconds === 'number', 'missing');
+    },
     'open-meteo geocoding': async () => {
       const j = await getJson('https://geocoding-api.open-meteo.com/v1/search?name=Boston&count=1');
       const r = j.results && j.results[0];

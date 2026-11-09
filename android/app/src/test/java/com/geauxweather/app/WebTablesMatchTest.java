@@ -61,4 +61,30 @@ public class WebTablesMatchTest {
             assertEquals("UV " + n, expected, UvNotifyHelper.category(n));
         }
     }
+
+    /** usAqiLabel / euAqiLabel bands must equal AqiNotifyHelper's (#58). */
+    @Test
+    public void aqiBandsMatchWeatherJs() throws Exception {
+        String src = weatherJs();
+        for (boolean us : new boolean[] {true, false}) {
+            String fn = us ? "function usAqiLabel" : "function euAqiLabel";
+            int start = src.indexOf(fn);
+            assertTrue("weather.js no longer has " + fn, start >= 0);
+            String body = src.substring(start, src.indexOf("\n  }", start));
+            Matcher m = Pattern.compile("if \\(n <= (\\d+)\\) return \\{ text: '([^']+)'").matcher(body);
+            List<Integer> max = new ArrayList<>();
+            List<String> text = new ArrayList<>();
+            while (m.find()) {
+                max.add(Integer.parseInt(m.group(1)));
+                text.add(m.group(2));
+            }
+            Matcher last = Pattern.compile("return \\{ text: '([^']+)', key: '[a-z]+' \\};\\s*$").matcher(body);
+            assertTrue("no top band in " + fn, last.find());
+            text.add(last.group(1));
+            int[] javaMax = us ? AqiNotifyHelper.US_MAX : AqiNotifyHelper.EU_MAX;
+            String[] javaText = us ? AqiNotifyHelper.US_TEXT : AqiNotifyHelper.EU_TEXT;
+            assertEquals(fn + " limits", max.toString(), Arrays.toString(javaMax));
+            assertEquals(fn + " names", text, Arrays.asList(javaText));
+        }
+    }
 }

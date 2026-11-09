@@ -78,18 +78,8 @@ public final class UvNotifyHelper {
 
     /** One wake and one small request per day, re-queued after each run (see PrecipNotifyHelper). */
     static Operation scheduleNext(Context context, ExistingWorkPolicy policy) {
-        int hour = parseInt(prefs(context).getString(KEY_HOUR, "8"), 8);
-        long delayMs = PrecipNotifyHelper.millisUntilNext(System.currentTimeMillis(), hour);
-        Constraints constraints = new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build();
-        OneTimeWorkRequest req = new OneTimeWorkRequest.Builder(DailyNotifyWorker.class)
-                .setInputData(DailyNotifyWorker.input(DailyNotifyWorker.UV))
-                .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
-                .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
-                .build();
-        return WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, policy, req);
+        return DailyNotifyWorker.enqueue(context, DailyNotifyWorker.UV, WORK_NAME,
+                DailyNotifyWorker.intPref(prefs(context), KEY_HOUR, 8), policy);
     }
 
     /** @return false only when the forecast could not be fetched (worth a retry). */
@@ -97,7 +87,7 @@ public final class UvNotifyHelper {
         if (!isEnabled(context)) return true;
         SharedPreferences prefs = prefs(context);
         int hourNow = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-        if (hourNow < parseInt(prefs.getString(KEY_HOUR, "8"), 8) || hourNow >= LAST_HOUR) return true;
+        if (hourNow < DailyNotifyWorker.intPref(prefs, KEY_HOUR, 8) || hourNow >= LAST_HOUR) return true;
 
         double[] loc = HurricaneAlertHelper.resolveLocation(prefs);
         if (loc == null) return true;
@@ -116,7 +106,7 @@ public final class UvNotifyHelper {
             String today = daily.getJSONArray("time").getString(0);
             if (today.equals(prefs.getString(KEY_LAST, null))) return true;
             double uv = daily.getJSONArray("uv_index_max").optDouble(0, 0);
-            int level = parseInt(prefs.getString(KEY_LEVEL, "8"), 8);
+            int level = DailyNotifyWorker.intPref(prefs, KEY_LEVEL, 8);
             String title = title(uv, level);
             Log.i(WidgetRefreshWorker.TAG, "uv: max " + uv + " (level " + level + ")"
                     + (title == null ? ", no notification" : ", notifying"));
@@ -141,14 +131,6 @@ public final class UvNotifyHelper {
     /** WHO bands; must match uvLabel() in www/js/weather.js (tested). */
     static String category(long n) {
         return n >= 11 ? "Extreme" : n >= 8 ? "Very high" : n >= 6 ? "High" : n >= 3 ? "Moderate" : "Low";
-    }
-
-    private static int parseInt(String s, int fallback) {
-        try {
-            return Integer.parseInt(s);
-        } catch (Exception e) {
-            return fallback;
-        }
     }
 
     private static SharedPreferences prefs(Context context) {

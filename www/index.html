@@ -270,6 +270,26 @@
             </select>
           </label>
           <label class="setting-row app-only">
+            <span>Poor air quality today</span>
+            <input type="checkbox" id="aqi-notify-toggle" />
+          </label>
+          <label class="setting-row app-only">
+            <span>When AQI reaches</span>
+            <select id="aqi-level">
+              <option value="1" selected>101 · Unhealthy (sensitive)</option>
+              <option value="2">151 · Unhealthy</option>
+              <option value="3">201 · Very unhealthy</option>
+            </select>
+          </label>
+          <label class="setting-row app-only">
+            <span>Notify at</span>
+            <select id="aqi-hour">
+              <option value="7">7 AM</option>
+              <option value="8" selected>8 AM</option>
+              <option value="9">9 AM</option>
+            </select>
+          </label>
+          <label class="setting-row app-only">
             <span>Temperature in status bar</span>
             <input type="checkbox" id="status-notif-toggle" checked />
           </label>

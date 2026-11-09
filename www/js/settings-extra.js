@@ -134,70 +134,72 @@
     });
   });
 
-  // Precipitation (rain or snow) tomorrow: native PrecipNotifyHelper reads these from Preferences
-  const precipToggle = document.getElementById('precip-notify-toggle');
-  const precipThreshold = document.getElementById('precip-threshold');
-  const precipHour = document.getElementById('precip-hour');
-  if (precipToggle && precipThreshold && precipHour) {
-    precipToggle.checked = localStorage.getItem('geauxweather_precip_notify') === 'on';
-    precipThreshold.value = localStorage.getItem('geauxweather_precip_threshold') || '70';
-    precipHour.value = localStorage.getItem('geauxweather_precip_hour') || '18';
-    const savePrecip = async function () {
-      const values = {
-        geauxweather_precip_notify: precipToggle.checked ? 'on' : 'off',
-        geauxweather_precip_threshold: precipThreshold.value,
-        geauxweather_precip_hour: precipHour.value,
-      };
+  /**
+   * The once-a-day notifications (tomorrow's precipitation, UV, air quality) share one shape: a switch, a
+   * level and an hour, saved to localStorage and Preferences (native reads them), then the plugin
+   * re-queues or cancels the daily check.
+   */
+  function wireDaily(ids, keys, defaults, method, label) {
+    const toggle = document.getElementById(ids[0]);
+    const level = document.getElementById(ids[1]);
+    const hour = document.getElementById(ids[2]);
+    if (!toggle || !level || !hour) return;
+    toggle.checked = localStorage.getItem(keys[0]) === 'on';
+    level.value = localStorage.getItem(keys[1]) || defaults[0];
+    hour.value = localStorage.getItem(keys[2]) || defaults[1];
+    const save = async function () {
+      const values = [toggle.checked ? 'on' : 'off', level.value, hour.value];
       try {
         const plugins = window.Capacitor && window.Capacitor.Plugins;
-        for (const key of Object.keys(values)) {
-          localStorage.setItem(key, values[key]);
-          if (plugins && plugins.Preferences) await plugins.Preferences.set({ key: key, value: values[key] });
+        for (let i = 0; i < keys.length; i++) {
+          localStorage.setItem(keys[i], values[i]);
+          if (plugins && plugins.Preferences) await plugins.Preferences.set({ key: keys[i], value: values[i] });
         }
-        // Reschedules the once-a-day check for the new time (or cancels it)
-        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.setPrecipNotify) {
-          await plugins.GeauxWeatherNative.setPrecipNotify({ enabled: precipToggle.checked });
+        // Re-queues the daily check for the new time (or cancels it)
+        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative[method]) {
+          await plugins.GeauxWeatherNative[method]({ enabled: toggle.checked });
         }
       } catch (e) {
-        console.warn('precipitation notification settings skipped', e);
+        console.warn(label + ' notification settings skipped', e);
       }
     };
-    precipToggle.addEventListener('change', savePrecip);
-    precipThreshold.addEventListener('change', savePrecip);
-    precipHour.addEventListener('change', savePrecip);
+    [toggle, level, hour].forEach((el) => el.addEventListener('change', save));
   }
 
-  // High UV today: native UvNotifyHelper reads these from Preferences
-  const uvToggle = document.getElementById('uv-notify-toggle');
-  const uvLevel = document.getElementById('uv-level');
-  const uvHour = document.getElementById('uv-hour');
-  if (uvToggle && uvLevel && uvHour) {
-    uvToggle.checked = localStorage.getItem('geauxweather_uv_notify') === 'on';
-    uvLevel.value = localStorage.getItem('geauxweather_uv_level') || '8';
-    uvHour.value = localStorage.getItem('geauxweather_uv_hour') || '8';
-    const saveUv = async function () {
-      const values = {
-        geauxweather_uv_notify: uvToggle.checked ? 'on' : 'off',
-        geauxweather_uv_level: uvLevel.value,
-        geauxweather_uv_hour: uvHour.value,
-      };
-      try {
-        const plugins = window.Capacitor && window.Capacitor.Plugins;
-        for (const key of Object.keys(values)) {
-          localStorage.setItem(key, values[key]);
-          if (plugins && plugins.Preferences) await plugins.Preferences.set({ key: key, value: values[key] });
-        }
-        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.setUvNotify) {
-          await plugins.GeauxWeatherNative.setUvNotify({ enabled: uvToggle.checked });
-        }
-      } catch (e) {
-        console.warn('UV notification settings skipped', e);
-      }
-    };
-    uvToggle.addEventListener('change', saveUv);
-    uvLevel.addEventListener('change', saveUv);
-    uvHour.addEventListener('change', saveUv);
+  wireDaily(
+    ['precip-notify-toggle', 'precip-threshold', 'precip-hour'],
+    ['geauxweather_precip_notify', 'geauxweather_precip_threshold', 'geauxweather_precip_hour'],
+    ['70', '18'],
+    'setPrecipNotify',
+    'precipitation'
+  );
+  wireDaily(
+    ['uv-notify-toggle', 'uv-level', 'uv-hour'],
+    ['geauxweather_uv_notify', 'geauxweather_uv_level', 'geauxweather_uv_hour'],
+    ['8', '8'],
+    'setUvNotify',
+    'UV'
+  );
+  wireDaily(
+    ['aqi-notify-toggle', 'aqi-level', 'aqi-hour'],
+    ['geauxweather_aqi_notify', 'geauxweather_aqi_level', 'geauxweather_aqi_hour'],
+    ['1', '8'],
+    'setAqiNotify',
+    'air quality'
+  );
+
+  /** AQI levels read in the scale the app shows: US AQI for °F, European AQI for °C. */
+  function labelAqiLevels() {
+    const sel = document.getElementById('aqi-level');
+    if (!sel) return;
+    const us = localStorage.getItem('units') !== 'metric';
+    const text = us
+      ? ['101 · Unhealthy (sensitive)', '151 · Unhealthy', '201 · Very unhealthy']
+      : ['EU 61 · Poor', 'EU 81 · Very poor', 'EU 101 · Extremely poor'];
+    Array.from(sel.options).forEach((o, i) => (o.textContent = text[i]));
+    sel.value = sel.value; // refresh the styled button's label (select-menu.js)
   }
+  labelAqiLevels();
 
   // Rain or snow in the next hour: native NextHourNotifyHelper reads this from Preferences
   const nextHourToggle = document.getElementById('nexthour-notify-toggle');
@@ -257,6 +259,9 @@
     ['geauxweather_uv_notify', 'geauxweather_uv_notify', 'uv-notify-toggle'],
     ['geauxweather_uv_level', 'geauxweather_uv_level', 'uv-level'],
     ['geauxweather_uv_hour', 'geauxweather_uv_hour', 'uv-hour'],
+    ['geauxweather_aqi_notify', 'geauxweather_aqi_notify', 'aqi-notify-toggle'],
+    ['geauxweather_aqi_level', 'geauxweather_aqi_level', 'aqi-level'],
+    ['geauxweather_aqi_hour', 'geauxweather_aqi_hour', 'aqi-hour'],
     ['geauxweather_status_notification', 'geauxweather_status_notification', 'status-notif-toggle'],
     ['geauxweather_model', 'forecast_model', 'forecast-model'],
     ['geauxweather_clock', 'unit_clock', 'unit-clock'],
@@ -294,7 +299,14 @@
 
   // Units never picked follow °F/°C: refresh after app.js has saved the new temperature unit
   const unitsSelect = document.getElementById('units');
-  if (unitsSelect) unitsSelect.addEventListener('change', () => setTimeout(showUnitPrefs, 0));
+  if (unitsSelect) {
+    unitsSelect.addEventListener('change', () =>
+      setTimeout(function () {
+        showUnitPrefs();
+        labelAqiLevels(); // the AQI scale follows °F/°C
+      }, 0)
+    );
+  }
 
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') syncPhoneClock(); // 24-hour switch may have changed

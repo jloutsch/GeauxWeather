@@ -84,6 +84,16 @@ public class GeauxWeatherNativePlugin extends Plugin {
         }
     }
 
+    @PluginMethod
+    public void setAqiNotify(PluginCall call) {
+        try {
+            AqiNotifyHelper.setEnabled(getContext(), call.getBoolean("enabled", false));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("setAqiNotify failed: " + e.getMessage());
+        }
+    }
+
     /** The phone's 24-hour switch, so "Automatic" time in the app matches the clock widget. */
     @PluginMethod
     public void is24HourFormat(PluginCall call) {
