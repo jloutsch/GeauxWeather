@@ -311,7 +311,9 @@ public final class HurricaneAlertHelper {
                 detail.put("lat", lat);
                 detail.put("lon", lon);
                 detail.put("place", placeLabel != null ? placeLabel : "");
-                detail.put("layer", mapLayerForEvent(event));
+                // The Tornado layer shows NWS (U.S.) alerts only; other countries' alerts open the radar
+                String layer = mapLayerForEvent(event);
+                detail.put("layer", props.has("source") && "tornado".equals(layer) ? "radar" : layer);
             } catch (Exception ignored) {
             }
             post(
@@ -395,6 +397,7 @@ public final class HurricaneAlertHelper {
             a.put("description", p.optString("alert_text_en", ""));
             a.put("ends", p.optString("event_end_datetime", p.optString("expiration_datetime", "")));
             a.put("sent", p.optString("publication_datetime", ""));
+            a.put("source", "Environment Canada");
             out.put(a);
         }
         return out;
@@ -420,6 +423,7 @@ public final class HurricaneAlertHelper {
             a.put("instruction", al.optString("instruction_en", ""));
             a.put("ends", al.optString("expires", ""));
             a.put("sent", al.optString("effective", ""));
+            a.put("source", "DWD");
             out.put(a);
         }
         return out;

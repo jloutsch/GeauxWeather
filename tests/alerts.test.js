@@ -251,3 +251,14 @@ test('a real NWS failure is still a failure (keeps the seen record), not a switc
   await assert.rejects(X.fetchPointAlerts(42.48, -71.1), /HTTP 503/);
   assert.deepEqual(asked, ['api.weather.gov']);
 });
+
+test('a Canadian tornado warning opens the radar, not the U.S.-only Tornado layer', () => {
+  const tornado = A.fromEccc({
+    features: [{ id: 't', properties: { alert_type: 'warning', alert_name_en: 'tornado warning', feature_id: 'f1', status_en: 'new' } }],
+  });
+  const loc = { lat: 49.9, lon: -97.1, label: 'Winnipeg' };
+  const ca = A.diffAndCollect(loc, tornado, [], { listAll: true });
+  assert.equal(ca[0].detail.layer, 'radar');
+  const us = A.diffAndCollect(loc, [{ id: 'u', event: 'Tornado Warning', severity: 'Extreme' }], [], { listAll: true });
+  assert.equal(us[0].detail.layer, 'tornado');
+});

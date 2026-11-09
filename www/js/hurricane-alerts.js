@@ -401,7 +401,8 @@
           lat: loc.lat,
           lon: loc.lon,
           place: place,
-          layer: mapLayerForEvent(p.event),
+          // The Tornado layer shows NWS (U.S.) alerts only; other countries' alerts open the radar
+          layer: p.source && mapLayerForEvent(p.event) === 'tornado' ? 'radar' : mapLayerForEvent(p.event),
         },
       });
     }
