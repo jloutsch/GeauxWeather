@@ -817,9 +817,6 @@
     renderNextHour(data);
     renderHourly(data);
     renderDaily(data);
-    if (window.PureSkySevere && window.PureSkySevere.renderActiveList) {
-      window.PureSkySevere.renderActiveList();
-    }
   }
 
   async function writeWidgetSnapshot(loc, data) {
@@ -890,6 +887,10 @@
     try {
       const data = await W.fetchForecast(loc.lat, loc.lon, units);
       renderAll(data);
+      // Only after a network load: the cached render on app open would double the alert requests
+      if (window.PureSkySevere && window.PureSkySevere.renderActiveList) {
+        window.PureSkySevere.renderActiveList();
+      }
       lastUpdatedAt = Date.now();
       showLastUpdated();
       writeWidgetSnapshot(loc, data);
