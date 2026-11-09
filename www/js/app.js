@@ -232,6 +232,10 @@
     if (hurToggle) {
       hurToggle.checked = localStorage.getItem('geauxweather_hurricane_alerts') === 'on';
     }
+    const notifToggle = document.getElementById('status-notif-toggle');
+    if (notifToggle) {
+      notifToggle.checked = localStorage.getItem('geauxweather_status_notification') !== 'off';
+    }
     syncWidgetStyleControls(loadWidgetStyle());
     const about = document.getElementById('app-about');
     if (about) {
@@ -253,6 +257,25 @@
       skyBgEnabled = !!skyBgToggle.checked;
       localStorage.setItem('sky_bg', skyBgEnabled ? 'on' : 'off');
       setSkyMood(lastWeatherCode, lastIsNight);
+    });
+  }
+  const statusNotifToggle = document.getElementById('status-notif-toggle');
+  if (statusNotifToggle) {
+    statusNotifToggle.addEventListener('change', async function () {
+      const value = statusNotifToggle.checked ? 'on' : 'off';
+      localStorage.setItem('geauxweather_status_notification', value);
+      try {
+        const plugins = window.Capacitor && window.Capacitor.Plugins;
+        if (plugins && plugins.Preferences) {
+          await plugins.Preferences.set({ key: 'geauxweather_status_notification', value: value });
+        }
+        // refreshChrome re-reads the pref: posts the notification when on, cancels it when off
+        if (plugins && plugins.GeauxWeatherNative && plugins.GeauxWeatherNative.refreshChrome) {
+          await plugins.GeauxWeatherNative.refreshChrome();
+        }
+      } catch (e) {
+        console.warn('status notification toggle skipped', e);
+      }
     });
   }
   wireWidgetStyleSettings();
