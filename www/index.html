@@ -201,6 +201,15 @@
               <option value="24">24-hour</option>
             </select>
           </label>
+          <label class="setting-row setting-row-stack">
+            <span>Forecast model <small class="muted">· hourly &amp; 10-day; current conditions and next-hour rain use Best match</small></span>
+            <select id="forecast-model">
+              <option value="best_match">Best match (default)</option>
+              <option value="ecmwf_ifs025">ECMWF (European)</option>
+              <option value="gfs_seamless">GFS (NOAA, U.S.)</option>
+              <option value="gem_seamless">GEM (Canada)</option>
+            </select>
+          </label>
           <label class="setting-row">
             <span>Weather backgrounds</span>
             <input type="checkbox" id="sky-bg-toggle" checked />

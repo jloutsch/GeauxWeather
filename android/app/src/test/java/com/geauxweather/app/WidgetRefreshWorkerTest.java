@@ -48,4 +48,13 @@ public class WidgetRefreshWorkerTest {
         assertTrue(WidgetRefreshWorker.alertDue(55 * min, 0, false));  // a run a few minutes early still checks
         assertTrue(WidgetRefreshWorker.alertDue(1 * min, 0, true));    // storm: every run
     }
+
+    @Test
+    public void onlyOfferedModelsReachTheRequest() {
+        assertEquals("ecmwf_ifs025", WidgetRefreshWorker.forecastModel("ecmwf_ifs025"));
+        assertEquals("gem_seamless", WidgetRefreshWorker.forecastModel("gem_seamless"));
+        assertEquals(null, WidgetRefreshWorker.forecastModel("best_match"));
+        assertEquals(null, WidgetRefreshWorker.forecastModel("x&latitude=0"));
+        assertEquals(null, WidgetRefreshWorker.forecastModel(null));
+    }
 }
