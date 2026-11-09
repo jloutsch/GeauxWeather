@@ -61,6 +61,8 @@ public final class HurricaneAlertHelper {
     private static final String KEY_SEEN = "geauxweather_severe_seen_native";
     private static final String KEY_LOC = "geauxweather_location";
     private static final String KEY_DEFAULT = "geauxweather_default";
+    /** "advisories" also notifies on NWS Moderate alerts; anything else = warnings only. Set from Settings. */
+    private static final String KEY_LEVEL = "geauxweather_alert_level";
     private static final String KEY_PENDING_ALERT = "geauxweather_pending_alert";
     public static final String EXTRA_ALERT_JSON = "geauxweather_alert_json";
     public static final String ACTION_OPEN_ALERT = "com.geauxweather.app.OPEN_ALERT";
@@ -198,6 +200,8 @@ public final class HurricaneAlertHelper {
         JSONObject root = new JSONObject(body);
         JSONArray features = root.optJSONArray("features");
         if (features == null) return;
+        boolean includeAdvisories = "advisories".equals(
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_LEVEL, "warnings"));
 
         for (int i = 0; i < features.length(); i++) {
             JSONObject f = features.optJSONObject(i);
@@ -205,7 +209,7 @@ public final class HurricaneAlertHelper {
             JSONObject props = f.optJSONObject("properties");
             if (props == null) continue;
             String event = props.optString("event", "");
-            if (!isSevereEvent(event)) continue;
+            if (!shouldNotify(event, props.optString("severity", ""), includeAdvisories)) continue;
 
             String alertId = props.optString("id", "");
             if (alertId.isEmpty()) {
@@ -279,6 +283,17 @@ public final class HurricaneAlertHelper {
                 || e.contains("tropical depression")
                 || e.contains("storm surge")
                 || e.contains("extreme wind");
+    }
+
+    /**
+     * Notify on the original storm events, anything NWS rates Extreme or Severe
+     * (winter storm, flood watch, high wind, …), and Moderate (advisories) when
+     * the user opted in. Minor alerts (frost, small craft, …) are never notified.
+     */
+    static boolean shouldNotify(String event, String severity, boolean includeAdvisories) {
+        if (isSevereEvent(event)) return true;
+        if ("Extreme".equals(severity) || "Severe".equals(severity)) return true;
+        return includeAdvisories && "Moderate".equals(severity);
     }
 
     // ─── NHC tropical near location ───────────────────────────────────────
@@ -461,12 +476,14 @@ public final class HurricaneAlertHelper {
         return s.substring(0, max - 1) + "…";
     }
 
-    private static String mapLayerForEvent(String event) {
+    static String mapLayerForEvent(String event) {
         String e = event != null ? event.toLowerCase(Locale.US) : "";
         if (e.contains("tornado")) return "tornado";
-        if (e.contains("hurricane") || e.contains("tropical")) return "hurricane";
+        if (e.contains("hurricane") || e.contains("tropical") || e.contains("storm surge")) return "hurricane";
         if (e.contains("thunder") || e.contains("flood")) return "lightning";
-        return "tornado";
+        if (e.contains("wind")) return "wind";
+        if (e.contains("fog")) return "fog";
+        return "radar";
     }
 
     private static void post(Context context, int id, String title, String body) {
@@ -522,7 +539,7 @@ public final class HurricaneAlertHelper {
                 "Severe storm alerts",
                 NotificationManager.IMPORTANCE_DEFAULT
         );
-        ch.setDescription("Tornado, severe thunderstorm, flash flood, and nearby tropical cyclone alerts for your location");
+        ch.setDescription("NWS warnings and watches (tornado, thunderstorm, flood, winter storm, high wind, …) and nearby tropical cyclones for your location");
         ch.setShowBadge(true);
         NotificationManager nm = context.getSystemService(NotificationManager.class);
         if (nm != null) nm.createNotificationChannel(ch);

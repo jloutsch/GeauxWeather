@@ -27,6 +27,7 @@
 (function (global) {
   const PREF_KEY = 'geauxweather_hurricane_alerts'; // kept for existing installs
   const SEEN_KEY = 'geauxweather_severe_seen';
+  const LEVEL_KEY = 'geauxweather_alert_level';
   const LOC_KEY = 'geauxweather_location';
   const DEFAULT_KEY = 'geauxweather_default';
   const POLL_MS = 15 * 60 * 1000;
@@ -188,12 +189,32 @@
     );
   }
 
+  /** 'advisories' also notifies on NWS Moderate alerts; default 'warnings'. Mirrored in HurricaneAlertHelper. */
+  function alertLevel() {
+    return localStorage.getItem(LEVEL_KEY) === 'advisories' ? 'advisories' : 'warnings';
+  }
+
+  /**
+   * Original storm events, anything NWS rates Extreme or Severe (winter storm,
+   * flood watch, high wind, …), plus Moderate when the user opted in.
+   * Minor alerts (frost, small craft, …) are never notified.
+   */
+  function shouldNotify(props, level) {
+    if (isSevereEvent(props.event)) return true;
+    if (props.severity === 'Extreme' || props.severity === 'Severe') return true;
+    return level === 'advisories' && props.severity === 'Moderate';
+  }
+
   function mapLayerForEvent(event) {
     const e = (event || '').toLowerCase();
     if (e.indexOf('tornado') >= 0) return 'tornado';
-    if (e.indexOf('hurricane') >= 0 || e.indexOf('tropical') >= 0) return 'hurricane';
+    if (e.indexOf('hurricane') >= 0 || e.indexOf('tropical') >= 0 || e.indexOf('storm surge') >= 0) {
+      return 'hurricane';
+    }
     if (e.indexOf('thunder') >= 0 || e.indexOf('flood') >= 0) return 'lightning';
-    return 'tornado';
+    if (e.indexOf('wind') >= 0) return 'wind';
+    if (e.indexOf('fog') >= 0) return 'fog';
+    return 'radar';
   }
 
   async function netFetch(url, as) {
@@ -217,10 +238,11 @@
       encodeURIComponent(lat.toFixed(4) + ',' + lon.toFixed(4));
     const geo = await netFetch(url, 'json');
     const features = (geo && geo.features) || [];
+    const level = alertLevel();
     const out = [];
     for (let i = 0; i < features.length; i++) {
       const props = features[i].properties || {};
-      if (!isSevereEvent(props.event)) continue;
+      if (!shouldNotify(props, level)) continue;
       out.push(props);
     }
     return out;
@@ -533,6 +555,21 @@
     toggle.addEventListener('change', function () {
       setEnabled(!!toggle.checked);
     });
+    const levelSelect = document.getElementById('alert-level-select');
+    if (levelSelect) {
+      levelSelect.value = alertLevel();
+      levelSelect.addEventListener('change', async function () {
+        const value = levelSelect.value === 'advisories' ? 'advisories' : 'warnings';
+        localStorage.setItem(LEVEL_KEY, value);
+        try {
+          const prefs = global.Capacitor && global.Capacitor.Plugins && global.Capacitor.Plugins.Preferences;
+          if (prefs) await prefs.set({ key: LEVEL_KEY, value: value });
+        } catch (e) {
+          console.warn('alert level prefs write skipped', e);
+        }
+        if (isEnabled()) checkNow();
+      });
+    }
   }
 
   function updateHint() {
@@ -542,12 +579,12 @@
       if (!hint) return;
       if (loc && loc.label) {
         hint.textContent =
-          'Tornado, severe thunderstorm, flash flood & nearby hurricanes for ' +
+          'NWS warnings & watches (tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for ' +
           loc.label +
-          ' (home or default). Tap a notification to open the map + details.';
+          ' (home or default), checked every 15 minutes. Tap a notification to open the map + details.';
       } else {
         hint.textContent =
-          'Tornado, severe thunderstorm, flash flood & nearby tropical storms for your home or default location. Set a location first.';
+          'NWS warnings & watches (tornado, thunderstorm, flood, winter storm, high wind…) and nearby tropical storms for your home or default location. Set a location first.';
       }
     });
   }
@@ -727,6 +764,8 @@
     startPolling: startPolling,
     stopPolling: stopPolling,
     openFromNotification: openFromNotification,
+    shouldNotify: shouldNotify,
+    mapLayerForEvent: mapLayerForEvent,
   };
   global.PureSkySevereAlerts = global.PureSkyHurricaneAlerts;
   global.PureSkySevere = global.PureSkyHurricaneAlerts;
