@@ -1,0 +1,69 @@
+# Guards this fork's features (clock widget, alerts, precipitation notification, night
+# icons, …): runs every JS and Android test, lint, and a debug build on each change,
+# including the upstream-sync PRs opened by upstream-sync.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: # upstream-sync.yml starts this on its branch (PRs it opens don't trigger pull_request)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      # Socket Firewall screens every package install; bootstrapping it is the one plain npm call.
+      - name: Install Socket Firewall
+        run: npm install -g sfw@2.0.4
+
+      - name: Install dependencies
+        run: sfw npm ci
+
+      - name: JS tests
+        run: sfw npm test
+
+      - name: Sync web assets into the Android project
+        run: sfw npx cap sync android
+
+      - name: Android unit tests, lint, debug build
+        working-directory: android
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            android/app/build/reports/
+            android/app/build/test-results/
+          retention-days: 14
