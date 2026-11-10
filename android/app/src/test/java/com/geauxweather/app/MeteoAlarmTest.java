@@ -150,6 +150,19 @@ public class MeteoAlarmTest {
                 "2026-11-11T06:00:00+00:00", codeArea("Dublin", "FIPS", "EI07"))).length());
     }
 
+    // Regression: ISSUE-002 — yellow "Moderate rain-flood warning" matched the U.S. "flood warning"
+    // always-notify rule. Found by /qa on 2026-11-10.
+    @Test
+    public void meteoAlarmNotifiesByLevelOnly() throws Exception {
+        JSONObject yellow = new JSONObject().put("event", "Moderate rain-flood warning")
+                .put("severity", "Moderate").put("source", "MeteoAlarm");
+        assertFalse(HurricaneAlertHelper.shouldNotify(yellow, false));
+        assertTrue(HurricaneAlertHelper.shouldNotify(yellow, true));
+        assertTrue(HurricaneAlertHelper.shouldNotify(new JSONObject(yellow.toString()).put("severity", "Severe"), false));
+        assertTrue(HurricaneAlertHelper.shouldNotify(
+                new JSONObject().put("event", "Flood Warning").put("severity", "Moderate"), false)); // NWS unchanged
+    }
+
     @Test
     public void savedAreaAppliesOnlyToTheLocationItWasWorkedOutFor() {
         assertNotNull(HurricaneAlertHelper.euMatchFor(DUBLIN_MATCH, 53.351, -6.259));

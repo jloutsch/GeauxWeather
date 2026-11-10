@@ -274,6 +274,16 @@ test('a MeteoAlarm feed failure is a failure (keeps the seen record), not an emp
   await assert.rejects(fr.A.fetchPointAlerts(48.86, 2.35), /HTTP 503/);
 });
 
+// Regression: ISSUE-002 — Météo-France yellow "Moderate rain-flood warning" matched the U.S. "flood warning"
+// always-notify rule, so it notified at the warnings-only level. Found by /qa on 2026-11-10.
+test('MeteoAlarm alerts notify by their awareness level only, not by U.S. event keywords', () => {
+  const yellow = { event: 'Moderate rain-flood warning', severity: 'Moderate', source: 'MeteoAlarm' };
+  assert.equal(A.shouldNotify(yellow, 'warnings'), false);
+  assert.ok(A.shouldNotify(yellow, 'advisories'));
+  assert.ok(A.shouldNotify(Object.assign({}, yellow, { severity: 'Severe' }), 'warnings'));
+  assert.ok(A.shouldNotify({ event: 'Flood Warning', severity: 'Moderate' }, 'warnings')); // NWS unchanged
+});
+
 test('MeteoAlarm alerts carry their source, sender and issue time into the alert detail', () => {
   const loc = { lat: 53.35, lon: -6.26, label: 'Dublin' };
   const props = [{ id: 'ma:ireland|Orange Wind|Severe|FIPS:EI07', event: 'Orange Wind', severity: 'Severe',

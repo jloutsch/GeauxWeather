@@ -266,7 +266,7 @@ public final class HurricaneAlertHelper {
             JSONObject props = alerts.optJSONObject(i);
             if (props == null) continue;
             String event = props.optString("event", "");
-            if (!shouldNotify(event, props.optString("severity", ""), includeAdvisories)) continue;
+            if (!shouldNotify(props, includeAdvisories)) continue;
 
             String alertId = props.optString("id", "");
             if (alertId.isEmpty()) {
@@ -615,6 +615,13 @@ public final class HurricaneAlertHelper {
      * (winter storm, flood watch, high wind, …), and Moderate (advisories) when
      * the user opted in. Minor alerts (frost, small craft, …) are never notified.
      */
+    static boolean shouldNotify(JSONObject props, boolean includeAdvisories) {
+        // MeteoAlarm already rates every warning yellow/orange/red; its event names ("Moderate
+        // rain-flood warning") must not trip the U.S. keyword rule
+        String event = "MeteoAlarm".equals(props.optString("source")) ? "" : props.optString("event", "");
+        return shouldNotify(event, props.optString("severity", ""), includeAdvisories);
+    }
+
     static boolean shouldNotify(String event, String severity, boolean includeAdvisories) {
         if (isSevereEvent(event)) return true;
         if ("Extreme".equals(severity) || "Severe".equals(severity)) return true;

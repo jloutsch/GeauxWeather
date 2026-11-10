@@ -207,7 +207,9 @@
    * Minor alerts (frost, small craft, …) are never notified.
    */
   function shouldNotify(props, level) {
-    if (isSevereEvent(props.event)) return true;
+    // MeteoAlarm already rates every warning yellow/orange/red; its event names ("Moderate rain-flood
+    // warning") must not trip the U.S. keyword rule
+    if (props.source !== 'MeteoAlarm' && isSevereEvent(props.event)) return true;
     if (props.severity === 'Extreme' || props.severity === 'Severe') return true;
     return level === 'advisories' && props.severity === 'Moderate';
   }
