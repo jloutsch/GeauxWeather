@@ -50,6 +50,7 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
             updateAppWidget(context, appWidgetManager, id);
         }
         WidgetRefreshWorker.ensureScheduled(context);
+        SunClock.scheduleNext(context); // alarms are cleared on reboot; widgets get onUpdate after it
     }
 
     public static void refreshAll(Context context) {
@@ -62,6 +63,7 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
             }
         }
         GeauxClockWidgetProvider.refreshAll(context);
+        SunClock.scheduleNext(context);
     }
 
     static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
@@ -197,8 +199,15 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
             String cond = o.optString("condition", "—");
             String high = o.optString("high", "—");
             String low = o.optString("low", "—");
-            return new Snapshot(loc, temp, cond, "H " + high + "  L " + low,
-                    o.optInt("weatherCode", -1), o.optInt("isDay", -1));
+            int code = o.optInt("weatherCode", -1);
+            int isDay = o.optInt("isDay", -1);
+            // Day or night from the clock: the snapshot keeps the one from its download, which can be hours old
+            Boolean sunUp = SunClock.isDaytimeAtHome(context);
+            if (sunUp != null) {
+                isDay = sunUp ? 1 : 0;
+                if (code >= 0) cond = WidgetRefreshWorker.condition(code, sunUp);
+            }
+            return new Snapshot(loc, temp, cond, "H " + high + "  L " + low, code, isDay);
         } catch (Exception e) {
             return fallback;
         }
