@@ -124,6 +124,20 @@
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
+  const LEVEL_SEVERITY = { 2: 'Moderate', 3: 'Severe', 4: 'Extreme' };
+
+  /**
+   * Awareness level from the "awareness_level" parameter ("2; yellow; Moderate"): 1 green (no particular
+   * awareness needed, so not a warning) to 4 red. Without it, CAP Minor counts as green. The CAP
+   * severity field sometimes disagrees with the level, so severity is taken from the level.
+   */
+  function awarenessLevel(info) {
+    const p = (info.parameter || []).find((x) => x.valueName === 'awareness_level');
+    const n = p ? parseInt(String(p.value), 10) : NaN;
+    if (n >= 1 && n <= 4) return n;
+    return info.severity === 'Minor' ? 1 : 0;
+  }
+
   /** Feed JSON → NWS-style alert properties for the warnings covering this point. */
   function fromMeteoAlarm(json, match, lat, lon, now) {
     now = now == null ? Date.now() : now;
@@ -135,16 +149,19 @@
       const info = infos.find((i) => /^en/i.test(i.language || '')) || infos[0];
       if (!info) return;
       if (info.expires && Date.parse(info.expires) <= now) return;
+      const level = awarenessLevel(info);
+      if (level === 1) return;
       const area = (info.area || []).find((ar) => areaMatches(ar, match, lat, lon));
       if (!area) return;
       const event = capitalize(info.event || 'Weather warning');
+      const severity = LEVEL_SEVERITY[level] || info.severity || 'Unknown';
       const where = (area.geocode || []).map((g) => g.valueName + ':' + g.value)[0] || area.areaDesc || '';
       out.push({
         // Re-issued warnings get new identifiers; event + severity + area notifies again only when it escalates
-        id: 'ma:' + match.feed + '|' + event + '|' + (info.severity || '') + '|' + where,
+        id: 'ma:' + match.feed + '|' + event + '|' + severity + '|' + where,
         identifier: a.identifier || '',
         event: event,
-        severity: info.severity || 'Unknown',
+        severity: severity,
         headline: info.headline || '',
         areaDesc: area.areaDesc || '',
         description: info.description || '',

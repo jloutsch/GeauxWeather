@@ -120,6 +120,36 @@ public class MeteoAlarmTest {
         assertNotEquals(v1, orange);
     }
 
+    // Regression: ISSUE-001 — green records were kept (Météo-France titles some "Severe rain-flood
+    // warning", which the always-notify keyword rule notified). Found by /qa on 2026-11-10.
+    @Test
+    public void greenRecordsAreDroppedAndSeverityFollowsTheLevel() throws Exception {
+        JSONObject[] ws = new JSONObject[5];
+        String[][] cases = {
+                {"1; green; Minor", "Minor", "Severe rain-flood warning"},
+                {"1; Green; Moderate", "Moderate", "Yellow Wind"},
+                {"2; yellow; Moderate", "Moderate", "Yellow Wind"},
+                {"3; Orange; Severe", "Moderate", "Orange Wind"},
+                {"4; red; Extreme", "Extreme", "Red Wind"},
+        };
+        for (int i = 0; i < cases.length; i++) {
+            ws[i] = warning(cases[i][0], "Actual", "Alert", cases[i][2], cases[i][1], "2026-11-10T06:00:00+00:00",
+                    "2026-11-11T06:00:00+00:00", codeArea("Dublin", "FIPS", "EI07"));
+            JSONArray infos = ws[i].getJSONObject("alert").getJSONArray("info");
+            for (int j = 0; j < infos.length(); j++) {
+                infos.getJSONObject(j).put("parameter", new JSONArray().put(
+                        new JSONObject().put("valueName", "awareness_level").put("value", cases[i][0])));
+            }
+        }
+        JSONArray out = parse(ws);
+        assertEquals(3, out.length());
+        assertEquals("Moderate", out.getJSONObject(0).getString("severity"));
+        assertEquals("Severe", out.getJSONObject(1).getString("severity"));
+        assertEquals("Extreme", out.getJSONObject(2).getString("severity"));
+        assertEquals(0, parse(warning("m", "Actual", "Alert", "Fog", "Minor", "2026-11-10T06:00:00+00:00",
+                "2026-11-11T06:00:00+00:00", codeArea("Dublin", "FIPS", "EI07"))).length());
+    }
+
     @Test
     public void savedAreaAppliesOnlyToTheLocationItWasWorkedOutFor() {
         assertNotNull(HurricaneAlertHelper.euMatchFor(DUBLIN_MATCH, 53.351, -6.259));

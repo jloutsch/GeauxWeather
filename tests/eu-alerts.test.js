@@ -154,6 +154,33 @@ test('the same warning re-issued with new times keeps its id; escalating changes
   assert.notEqual(m({}), m({ event: 'Orange Wind', severity: 'Severe' }));
 });
 
+// Regression: ISSUE-001 — green "no particular awareness" records were kept; Météo-France titles some
+// "Severe rain-flood warning", which the always-notify keyword rule turned into notifications.
+// Found by /qa on 2026-11-10. Report: .gstack/qa-reports/qa-report-eu-alerts-2026-11-10.md
+test('green (level 1) records are dropped; severity follows the awareness level', () => {
+  const level = (lvl, severity, event) => {
+    const w = warning({ id: lvl, severity: severity, event: event });
+    w.alert.info.forEach((i) => (i.parameter = [{ valueName: 'awareness_level', value: lvl }]));
+    return w;
+  };
+  const out = EU.fromMeteoAlarm(
+    {
+      warnings: [
+        level('1; green; Minor', 'Minor', 'Severe rain-flood warning'),
+        level('1; Green; Moderate', 'Moderate', 'Yellow Wind'),
+        level('2; yellow; Moderate', 'Moderate', 'Yellow Wind'),
+        level('3; Orange; Severe', 'Moderate', 'Orange Wind'), // severity field disagrees with the level
+        level('4; red; Extreme', 'Extreme', 'Red Wind'),
+      ],
+    },
+    DUBLIN, 53.35, -6.26, NOW
+  );
+  assert.deepEqual([...out.map((a) => a.identifier)], ['2; yellow; Moderate', '3; Orange; Severe', '4; red; Extreme']);
+  assert.deepEqual([...out.map((a) => a.severity)], ['Moderate', 'Severe', 'Extreme']);
+  const noLevel = EU.fromMeteoAlarm({ warnings: [warning({ severity: 'Minor' })] }, DUBLIN, 53.35, -6.26, NOW);
+  assert.equal(noLevel.length, 0, 'without a level, Minor is treated as green');
+});
+
 test('a warning with no English text falls back to the first language', () => {
   const w = warning();
   w.alert.info = [w.alert.info[0]];

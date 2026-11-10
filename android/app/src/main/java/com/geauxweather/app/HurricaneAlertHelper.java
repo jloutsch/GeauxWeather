@@ -485,6 +485,8 @@ public final class HurricaneAlertHelper {
             if (info == null) continue;
             long expires = parseIsoMillis(info.optString("expires", ""));
             if (expires > 0 && expires <= now) continue;
+            int level = awarenessLevel(info);
+            if (level == 1) continue; // green: no particular awareness needed, not a warning
 
             JSONObject area = null;
             String where = "";
@@ -514,7 +516,8 @@ public final class HurricaneAlertHelper {
 
             String event = info.optString("event", "Weather warning");
             if (!event.isEmpty()) event = Character.toUpperCase(event.charAt(0)) + event.substring(1);
-            String severity = info.optString("severity", "Unknown");
+            String severity = level == 2 ? "Moderate" : level == 3 ? "Severe" : level == 4 ? "Extreme"
+                    : info.optString("severity", "Unknown");
             JSONObject a = new JSONObject();
             // Re-issued warnings get new identifiers; event + severity + area notifies again only when it escalates
             a.put("id", "ma:" + feed + "|" + event + "|" + severity + "|" + where);
@@ -533,6 +536,24 @@ public final class HurricaneAlertHelper {
             out.put(a);
         }
         return out;
+    }
+
+    /**
+     * Awareness level from the "awareness_level" parameter ("2; yellow; Moderate"): 1 green to 4 red;
+     * without it, CAP Minor counts as green (1), anything else unknown (0). See eu-alerts.js.
+     */
+    static int awarenessLevel(JSONObject info) {
+        JSONArray params = info.optJSONArray("parameter");
+        for (int i = 0; params != null && i < params.length(); i++) {
+            JSONObject p = params.optJSONObject(i);
+            if (p == null || !"awareness_level".equals(p.optString("valueName"))) continue;
+            try {
+                int n = Integer.parseInt(p.optString("value", "").split(";")[0].trim());
+                if (n >= 1 && n <= 4) return n;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return "Minor".equals(info.optString("severity")) ? 1 : 0;
     }
 
     /** CAP polygon: "lat,lon lat,lon …"; ray casting on the point. */
