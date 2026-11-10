@@ -117,3 +117,28 @@ test('moon phase matches the U.S. Naval Observatory for November 2026', () => {
   assert.equal(name('2026-11-24T14:53:00Z'), 'Full moon');
   assert.equal(name('2026-12-01T06:08:00Z'), 'Last quarter');
 });
+
+// Sunrise and sunset in UTC from the Open-Meteo archive API (the app's own data source).
+// Checked 5 minutes either side so a 1-2 minute difference in the solar formula can't flip a result.
+const SUN_TIMES = [
+  { place: 'Boston, June solstice', lat: 42.36, lon: -71.06, rise: '2025-06-21T09:07Z', set: '2025-06-22T00:24Z' },
+  { place: 'Boston, December solstice', lat: 42.36, lon: -71.06, rise: '2025-12-21T12:10Z', set: '2025-12-21T21:15Z' },
+  { place: 'Sydney, June solstice', lat: -33.87, lon: 151.21, rise: '2025-06-20T20:59Z', set: '2025-06-21T06:53Z' },
+  { place: 'Baton Rouge, March equinox', lat: 30.45, lon: -91.19, rise: '2025-03-20T12:07Z', set: '2025-03-21T00:16Z' },
+];
+
+test('isDaytime switches at sunrise and sunset', () => {
+  const at = (iso, mins) => new Date(Date.parse(iso) + mins * 60000);
+  for (const s of SUN_TIMES) {
+    assert.equal(W.isDaytime(at(s.rise, -5), s.lat, s.lon), false, s.place + ': before sunrise');
+    assert.equal(W.isDaytime(at(s.rise, 5), s.lat, s.lon), true, s.place + ': after sunrise');
+    assert.equal(W.isDaytime(at(s.set, -5), s.lat, s.lon), true, s.place + ': before sunset');
+    assert.equal(W.isDaytime(at(s.set, 5), s.lat, s.lon), false, s.place + ': after sunset');
+  }
+});
+
+test('isDaytime handles polar night and midnight sun', () => {
+  // Tromsø: Open-Meteo gives 0 s of daylight on 2025-12-21 and 86400 s on 2025-06-21
+  assert.equal(W.isDaytime(new Date('2025-12-21T11:00Z'), 69.65, 18.96), false); // local noon
+  assert.equal(W.isDaytime(new Date('2025-06-21T23:00Z'), 69.65, 18.96), true); // local 1 AM
+});

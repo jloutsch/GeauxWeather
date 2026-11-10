@@ -302,6 +302,29 @@
     };
   }
 
+  /**
+   * Whether the sun is up at a place, from its position (NOAA low-precision formulas, about a minute
+   * of error). Lets saved snapshots show the right sun or moon before fresh data arrives.
+   * @param {Date} date
+   * @param {number} lat
+   * @param {number} lon
+   */
+  function isDaytime(date, lat, lon) {
+    const rad = Math.PI / 180;
+    const n = date.getTime() / 86400000 + 2440587.5 - 2451545.0; // days since J2000
+    const meanLon = 280.46 + 0.9856474 * n;
+    const anomaly = (357.528 + 0.9856003 * n) * rad;
+    const eclLon = (meanLon + 1.915 * Math.sin(anomaly) + 0.02 * Math.sin(2 * anomaly)) * rad;
+    const obliquity = (23.439 - 0.0000004 * n) * rad;
+    const dec = Math.asin(Math.sin(obliquity) * Math.sin(eclLon));
+    const ra = Math.atan2(Math.cos(obliquity) * Math.sin(eclLon), Math.cos(eclLon));
+    const hourAngle = (280.46061837 + 360.98564736629 * n + Number(lon)) * rad - ra; // a string lon would concatenate
+    const elevation = Math.asin(
+      Math.sin(lat * rad) * Math.sin(dec) + Math.cos(lat * rad) * Math.cos(dec) * Math.cos(hourAngle)
+    );
+    return elevation > -0.833 * rad; // sunrise/sunset: upper limb on the horizon, with refraction
+  }
+
   /** WHO UV categories; `key` matches the AQI tile color classes. */
   function uvLabel(uv) {
     const n = Math.round(Number(uv));
@@ -315,6 +338,7 @@
   global.PureSkyWeather = {
     uvLabel: uvLabel,
     moonPhase: moonPhase,
+    isDaytime: isDaytime,
     fetchForecast: fetchForecast,
     fetchAirQuality: fetchAirQuality,
     usAqiLabel: usAqiLabel,

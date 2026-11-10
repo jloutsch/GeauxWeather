@@ -411,7 +411,13 @@
 
   function renderCurrent(data) {
     const c = data.current;
-    const night = c.is_day != null ? c.is_day === 0 : isNightFromDaily(data);
+    // Day or night from the clock: a forecast cached last night would otherwise show a moon after sunrise
+    const night =
+      data.latitude != null && data.longitude != null
+        ? !W.isDaytime(new Date(), data.latitude, data.longitude)
+        : c.is_day != null
+          ? c.is_day === 0
+          : isNightFromDaily(data);
     const cond = W.codeToCondition(c.weather_code, !night);
     const deg = units === 'metric' ? '°C' : '°F';
     const windU = U.windLabel();
@@ -1148,8 +1154,9 @@
       : p.weatherCode != null
         ? W.codeToCondition(p.weatherCode).text
         : '—';
-    const icon =
-      p.weatherCode != null ? W.codeToCondition(p.weatherCode, p.isDay !== 0).icon : '📍';
+    // Day or night from the clock, not the snapshot: a snapshot saved last night would show a moon all morning
+    const isDay = p.lat != null && p.lon != null ? W.isDaytime(new Date(), p.lat, p.lon) : p.isDay !== 0;
+    const icon = p.weatherCode != null ? W.codeToCondition(p.weatherCode, isDay).icon : '📍';
     const temp = p.temp != null ? p.temp + '°' : '—°';
     const defBadge = p.isDefault
       ? '<span class="place-badge">Default</span>'
