@@ -63,7 +63,7 @@ public final class SunClock extends BroadcastReceiver {
     /**
      * One non-waking alarm at the next sunrise or sunset (a minute after, so the sun has crossed). A
      * sleeping phone gets it when the screen comes on, which is when the widget is seen. Replaces any
-     * earlier alarm; costs no network.
+     * earlier alarm; costs no network. Inexact: Android may deliver it some minutes late.
      */
     static void scheduleNext(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(Notify.PREFS, Context.MODE_PRIVATE);
@@ -80,7 +80,9 @@ public final class SunClock extends BroadcastReceiver {
         long next = nextChange(now, loc[0], loc[1]);
         // Polar day or night: look again in 12 hours
         long at = next > 0 ? next + MIN : now + 12 * 60 * MIN;
-        am.setWindow(AlarmManager.RTC, at, 5 * MIN, pi);
+        // Allow-while-idle: with Battery Saver on, Android defers plain alarms of background apps
+        // indefinitely but only rate-limits these (fine at two a day). Still RTC, so it never wakes the phone.
+        am.setAndAllowWhileIdle(AlarmManager.RTC, at, pi);
     }
 
     @Override
