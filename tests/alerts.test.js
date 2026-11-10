@@ -207,12 +207,13 @@ test('Bright Sky (DWD) alerts become NWS-style alerts; test messages are dropped
 });
 
 /** Loads hurricane-alerts.js with a fake PureSkyNet that answers by host. */
-function loadWithNet(answers) {
+function loadWithNet(answers, euAlerts) {
   const src = fs.readFileSync(path.join(__dirname, '..', 'www', 'js', 'hurricane-alerts.js'), 'utf8');
   const noop = () => {};
   const asked = [];
   const sandbox = {
     window: {
+      PureSkyEuAlerts: euAlerts,
       PureSkyNet: {
         fetch: async (url) => {
           const host = new URL(url).hostname;
@@ -242,8 +243,48 @@ test('in Germany it uses Bright Sky; a 404 there means "not covered", not a fail
   const de = loadWithNet({ 'api.weather.gov': 400, 'api.brightsky.dev': BRIGHTSKY });
   assert.equal((await de.A.fetchPointAlerts(52.52, 13.4)).length, 2);
   assert.deepEqual(de.asked, ['api.weather.gov', 'api.brightsky.dev']);
-  const edge = loadWithNet({ 'api.weather.gov': 400, 'api.brightsky.dev': 404 });
+  const edge = loadWithNet({ 'api.weather.gov': 400, 'api.brightsky.dev': 404, 'api.weather.gc.ca': { features: [] } });
   assert.deepEqual(Array.from(await edge.A.fetchPointAlerts(47.5, 7.6)), []); // Basel, inside the box but Swiss
+});
+
+test('in the other EU countries it uses MeteoAlarm, also where the Germany box overlaps (Prague)', async () => {
+  const calls = [];
+  const eu = {
+    fetchAlerts: async (lat, lon, net) => {
+      calls.push([lat, lon]);
+      return [{ id: 'ma:czechia|Yellow Wind|Moderate|EMMA_ID:CZ0100', event: 'Yellow Wind', severity: 'Moderate', source: 'MeteoAlarm' }];
+    },
+  };
+  const cz = loadWithNet({ 'api.weather.gov': 400, 'api.brightsky.dev': 404 }, eu);
+  const out = await cz.A.fetchPointAlerts(50.08, 14.42);
+  assert.equal(out[0].source, 'MeteoAlarm');
+  assert.deepEqual(cz.asked, ['api.weather.gov', 'api.brightsky.dev']);
+  assert.deepEqual(calls, [[50.08, 14.42]]);
+});
+
+test('outside the MeteoAlarm countries (null) it falls through to Environment Canada', async () => {
+  const eu = { fetchAlerts: async () => null };
+  const ca = loadWithNet({ 'api.weather.gov': 400, 'api.weather.gc.ca': ECCC }, eu);
+  assert.equal((await ca.A.fetchPointAlerts(53.25, -132.07))[0].event, 'Winter Storm Warning');
+});
+
+test('a MeteoAlarm feed failure is a failure (keeps the seen record), not an empty list', async () => {
+  const eu = { fetchAlerts: async () => { throw new Error('HTTP 503'); } };
+  const fr = loadWithNet({ 'api.weather.gov': 400 }, eu);
+  await assert.rejects(fr.A.fetchPointAlerts(48.86, 2.35), /HTTP 503/);
+});
+
+test('MeteoAlarm alerts carry their source, sender and issue time into the alert detail', () => {
+  const loc = { lat: 53.35, lon: -6.26, label: 'Dublin' };
+  const props = [{ id: 'ma:ireland|Orange Wind|Severe|FIPS:EI07', event: 'Orange Wind', severity: 'Severe',
+    areaDesc: 'Dublin', source: 'MeteoAlarm', sender: 'Met Éireann', sent: '2026-11-10T06:00:00+00:00' }];
+  const d = A.diffAndCollect(loc, props, [], { listAll: true })[0].detail;
+  assert.equal(d.source, 'MeteoAlarm');
+  assert.equal(d.sender, 'Met Éireann');
+  assert.equal(d.sent, '2026-11-10T06:00:00+00:00');
+  assert.equal(d.layer, 'wind');
+  const storm = A.diffAndCollect(loc, [Object.assign({}, props[0], { event: 'Red Thunderstorm' })], [], { listAll: true })[0];
+  assert.notEqual(storm.detail.layer, 'tornado'); // the Tornado layer shows U.S. (NWS) alerts only
 });
 
 test('a real NWS failure is still a failure (keeps the seen record), not a switch to Canada', async () => {

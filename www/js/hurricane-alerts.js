@@ -299,7 +299,8 @@
 
   /**
    * Alerts for a point as NWS-style properties: NWS in the U.S.; outside it (NWS answers 400 for a point
-   * it doesn't cover) the DWD via Bright Sky in Germany, else Environment Canada (empty outside Canada).
+   * it doesn't cover) the DWD via Bright Sky in Germany, MeteoAlarm in the other EU countries
+   * (eu-alerts.js), else Environment Canada (empty outside Canada).
    */
   async function fetchPointAlerts(lat, lon) {
     const q = encodeURIComponent(lat.toFixed(4) + ',' + lon.toFixed(4));
@@ -315,9 +316,14 @@
           await netFetch('https://api.brightsky.dev/alerts?lat=' + lat.toFixed(4) + '&lon=' + lon.toFixed(4), 'json')
         );
       } catch (e) {
-        if (!/HTTP 404\b/.test(String(e && e.message))) throw e; // 404: not covered by the DWD
-        return [];
+        // 404: not covered by the DWD. The box also holds Prague, Luxembourg, Strasbourg…: try MeteoAlarm next
+        if (!/HTTP 404\b/.test(String(e && e.message))) throw e;
       }
+    }
+    const eu = global.PureSkyEuAlerts;
+    if (eu) {
+      const out = await eu.fetchAlerts(lat, lon, netFetch);
+      if (out) return out;
     }
     const d = 0.001;
     return fromEccc(
@@ -398,6 +404,9 @@
           description: String(description).slice(0, 1200),
           instruction: String(instruction).slice(0, 800),
           ends: p.ends || p.expires || '',
+          source: p.source || '',
+          sender: p.sender || '',
+          sent: p.sent || '',
           lat: loc.lat,
           lon: loc.lon,
           place: place,
@@ -691,12 +700,12 @@
       if (!hint) return;
       if (loc && loc.label) {
         hint.textContent =
-          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD: tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for ' +
+          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD, other EU countries via MeteoAlarm: tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for ' +
           loc.label +
           ' (home or default), checked about hourly, and every 15 minutes while a storm watch or warning is active. Tap a notification to open the map + details.';
       } else {
         hint.textContent =
-          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD: tornado, thunderstorm, flood, winter storm, high wind…) and nearby tropical storms for your home or default location. Set a location first.';
+          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD, other EU countries via MeteoAlarm: tornado, thunderstorm, flood, winter storm, high wind…) and nearby tropical storms for your home or default location. Set a location first.';
       }
     });
   }
@@ -804,6 +813,30 @@
     if (sheet) sheet.classList.add('hidden');
   }
 
+  /** MeteoAlarm terms, section 5: national service, issue time, link and the delay disclaimer. */
+  function meteoAlarmCredit(detail) {
+    if (detail.source !== 'MeteoAlarm') return '';
+    let issued = '';
+    if (detail.sent) {
+      const t = new Date(detail.sent);
+      if (!isNaN(t)) {
+        issued = 'Issued ' + t.toLocaleString([], timeOpts({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
+      }
+    }
+    const by = detail.sender ? 'by ' + detail.sender : '';
+    return (
+      '<p class="muted small">' +
+      escapeHtml([issued, by].filter(Boolean).join(' ')) +
+      (issued || by ? ' · ' : '') +
+      'via <a href="https://meteoalarm.org/en/live/" target="_blank" rel="noopener">MeteoAlarm</a></p>' +
+      '<p class="muted small">Time delays between this app and the ' +
+      '<a href="https://meteoalarm.org/en/live/" target="_blank" rel="noopener">www.meteoalarm.org</a> website ' +
+      'are possible. For the most up-to-date awareness information as published by the participating ' +
+      'National Meteorological and Hydrological Services, please refer to ' +
+      '<a href="https://meteoalarm.org/en/live/" target="_blank" rel="noopener">www.meteoalarm.org</a>.</p>'
+    );
+  }
+
   function showAlertSheet(detail) {
     const sheet = ensureAlertSheet();
     const title = document.getElementById('severe-alert-title');
@@ -852,6 +885,7 @@
     if (!html) {
       html = '<p class="muted">Open Maps for nearby severe weather layers.</p>';
     }
+    html += meteoAlarmCredit(detail);
     if (body) body.innerHTML = html;
     if (mapsBtn) {
       mapsBtn.onclick = function () {
