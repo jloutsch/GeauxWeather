@@ -115,6 +115,10 @@
   }
 
   function areaMatches(area, match, lat, lon) {
+    const outlines = area.polygon || [];
+    // No outlines in the area data for this country (Luxembourg, Sweden, Estonia): a warning area without
+    // its own outline can't be placed, so treat it as covering the whole country rather than never showing it
+    if (!match.codes.length && !outlines.length) return true;
     const byCode = (area.geocode || []).some((g) => match.codes.includes(g.valueName + ':' + g.value));
     return byCode || (area.polygon || []).some((p) => inCapPolygon(p, lat, lon));
   }

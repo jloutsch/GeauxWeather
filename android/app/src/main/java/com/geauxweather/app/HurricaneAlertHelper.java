@@ -503,6 +503,9 @@ public final class HurricaneAlertHelper {
                     }
                 }
                 JSONArray polys = ar.optJSONArray("polygon");
+                // No outlines saved for this country (Luxembourg, Sweden, Estonia) and none in the
+                // warning: treat it as covering the whole country rather than never showing it
+                if (codes.isEmpty() && (polys == null || polys.length() == 0)) area = ar;
                 for (int p = 0; area == null && polys != null && p < polys.length(); p++) {
                     if (inCapPolygon(polys.optString(p), lat, lon)) area = ar;
                 }

@@ -163,6 +163,23 @@ public class MeteoAlarmTest {
                 new JSONObject().put("event", "Flood Warning").put("severity", "Moderate"), false)); // NWS unchanged
     }
 
+    // Regression: ISSUE-003 — Luxembourg has no outlines in the area data, so a code-only warning could
+    // never match. Found by /qa on 2026-11-10.
+    @Test
+    public void codeOnlyWarningCoversACountryWithNoOutlines() throws Exception {
+        JSONObject lu = HurricaneAlertHelper.euMatchFor(
+                "{\"lat\":49.61,\"lon\":6.13,\"feed\":\"luxembourg\",\"codes\":[]}", 49.61, 6.13);
+        JSONObject coded = warning("coded", "Actual", "Alert", "Yellow Wind", "Moderate", "2026-11-10T06:00:00+00:00",
+                "2026-11-11T06:00:00+00:00", codeArea("Luxembourg", "EMMA_ID", "LU001"));
+        JSONObject outlined = warning("elsewhere", "Actual", "Alert", "Yellow Wind", "Moderate",
+                "2026-11-10T06:00:00+00:00", "2026-11-11T06:00:00+00:00", new JSONObject().put("areaDesc", "North")
+                        .put("polygon", new JSONArray().put("50.1,6.0 50.1,6.1 50.2,6.1 50.2,6.0 50.1,6.0")));
+        JSONArray out = HurricaneAlertHelper.fromMeteoAlarm(
+                new JSONObject().put("warnings", new JSONArray().put(coded).put(outlined)), lu, 49.61, 6.13, NOW);
+        assertEquals(1, out.length());
+        assertEquals("coded", out.getJSONObject(0).getString("identifier"));
+    }
+
     @Test
     public void savedAreaAppliesOnlyToTheLocationItWasWorkedOutFor() {
         assertNotNull(HurricaneAlertHelper.euMatchFor(DUBLIN_MATCH, 53.351, -6.259));

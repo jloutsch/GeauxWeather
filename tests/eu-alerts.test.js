@@ -181,6 +181,18 @@ test('green (level 1) records are dropped; severity follows the awareness level'
   assert.equal(noLevel.length, 0, 'without a level, Minor is treated as green');
 });
 
+// Regression: ISSUE-003 — Luxembourg has no outlines in the area data, so a warning tagged only with a code
+// could never match. Found by /qa on 2026-11-10 (format unconfirmed: the feed was empty that day).
+test('in a country with no outlines, a warning without its own outline covers the whole country', () => {
+  const lu = { feed: 'luxembourg', codes: [] };
+  const coded = warning({ id: 'coded', area: { areaDesc: 'Luxembourg', geocode: [{ valueName: 'EMMA_ID', value: 'LU001' }] } });
+  const outlined = warning({ id: 'elsewhere', area: { areaDesc: 'North', polygon: ['50.1,6.0 50.1,6.1 50.2,6.1 50.2,6.0 50.1,6.0'] } });
+  const out = EU.fromMeteoAlarm({ warnings: [coded, outlined] }, lu, 49.61, 6.13, NOW);
+  assert.deepEqual([...out.map((a) => a.identifier)], ['coded']);
+  const dublinOther = warning({ id: 'kerry', area: { areaDesc: 'Kerry', geocode: [{ valueName: 'FIPS', value: 'EI11' }] } });
+  assert.equal(EU.fromMeteoAlarm({ warnings: [dublinOther] }, DUBLIN, 53.35, -6.26, NOW).length, 0); // codes known: no fallback
+});
+
 test('a warning with no English text falls back to the first language', () => {
   const w = warning();
   w.alert.info = [w.alert.info[0]];
