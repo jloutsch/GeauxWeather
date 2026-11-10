@@ -48,6 +48,7 @@ public class GeauxClockWidgetProvider extends AppWidgetProvider {
             updateAppWidget(context, appWidgetManager, id);
         }
         WidgetRefreshWorker.ensureScheduled(context);
+        SunClock.scheduleNext(context);
     }
 
     @Override

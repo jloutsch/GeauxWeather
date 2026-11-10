@@ -71,6 +71,10 @@
         </activity>
 
         <!-- Reschedule hurricane alert worker after reboot -->
+        <!-- Redraws the widgets at sunrise and sunset (alarm set by SunClock.scheduleNext) -->
+        <receiver
+            android:name=".SunClock"
+            android:exported="false" />
         <receiver
             android:name=".HurricaneBootReceiver"
             android:exported="true"
