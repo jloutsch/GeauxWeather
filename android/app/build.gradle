@@ -61,6 +61,8 @@ dependencies {
     implementation "androidx.work:work-runtime:2.9.1"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    // android.jar's org.json is stubbed in local unit tests; the real one lets alert parsing be tested
+    testImplementation "org.json:json:20240303"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')

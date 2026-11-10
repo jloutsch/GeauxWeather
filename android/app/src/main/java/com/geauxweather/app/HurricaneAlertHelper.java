@@ -66,6 +66,9 @@ public final class HurricaneAlertHelper {
     public static final String EXTRA_ALERT_JSON = "geauxweather_alert_json";
     public static final String ACTION_OPEN_ALERT = "com.geauxweather.app.OPEN_ALERT";
     private static final String NHC_URL = "https://www.nhc.noaa.gov/CurrentStorms.json";
+    /** {lat, lon, feed, codes}: the MeteoAlarm areas for the home location, saved by eu-alerts.js. */
+    private static final String KEY_EU_AREA = "geauxweather_eu_area";
+    private static final String MA_FEED_URL = "https://feeds.meteoalarm.org/api/v1/warnings/feeds-";
     private static final int BASE_NOTIF_ID = 7000;
     /** Tropical systems farther than this from home are ignored (miles). */
     private static final double TROPICAL_RADIUS_MI = 500.0;
@@ -254,16 +257,16 @@ public final class HurricaneAlertHelper {
             JSONObject next,
             boolean quiet
     ) throws Exception {
-        JSONArray alerts = fetchPointAlerts(lat, lon);
+        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        JSONArray alerts = fetchPointAlerts(lat, lon, prefs.getString(KEY_EU_AREA, null));
         if (alerts == null) return false;
-        boolean includeAdvisories = "advisories".equals(
-                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_LEVEL, "warnings"));
+        boolean includeAdvisories = "advisories".equals(prefs.getString(KEY_LEVEL, "warnings"));
 
         for (int i = 0; i < alerts.length(); i++) {
             JSONObject props = alerts.optJSONObject(i);
             if (props == null) continue;
             String event = props.optString("event", "");
-            if (!shouldNotify(event, props.optString("severity", ""), includeAdvisories)) continue;
+            if (!shouldNotify(props, includeAdvisories)) continue;
 
             String alertId = props.optString("id", "");
             if (alertId.isEmpty()) {
@@ -308,6 +311,9 @@ public final class HurricaneAlertHelper {
                 detail.put("description", trimLen(description, 1200));
                 detail.put("instruction", trimLen(instruction, 800));
                 detail.put("ends", ends);
+                detail.put("source", props.optString("source", ""));
+                detail.put("sender", props.optString("sender", ""));
+                detail.put("sent", props.optString("sent", ""));
                 detail.put("lat", lat);
                 detail.put("lon", lon);
                 detail.put("place", placeLabel != null ? placeLabel : "");
@@ -329,10 +335,11 @@ public final class HurricaneAlertHelper {
 
     /**
      * Alerts for a point as NWS-style properties, or null when the feed failed. NWS covers the U.S.
-     * and answers 400 for a point it doesn't; then the DWD (via Bright Sky) in Germany, else
-     * Environment Canada (empty outside Canada). Same logic as fetchPointAlerts in hurricane-alerts.js.
+     * and answers 400 for a point it doesn't; then the DWD (via Bright Sky) in Germany, MeteoAlarm in
+     * the other EU countries (areas worked out by eu-alerts.js and saved as euArea), else Environment
+     * Canada (empty outside Canada). Same logic as fetchPointAlerts in hurricane-alerts.js.
      */
-    static JSONArray fetchPointAlerts(double lat, double lon) throws Exception {
+    static JSONArray fetchPointAlerts(double lat, double lon, String euArea) throws Exception {
         HttpResult nws = httpGetResult(String.format(Locale.US,
                 "https://api.weather.gov/alerts/active?status=actual&point=%.4f,%.4f", lat, lon),
                 "application/geo+json,application/json");
@@ -349,8 +356,13 @@ public final class HurricaneAlertHelper {
         if (inGermany(lat, lon)) {
             HttpResult dwd = httpGetResult(String.format(Locale.US,
                     "https://api.brightsky.dev/alerts?lat=%.4f&lon=%.4f", lat, lon), "application/json");
-            if (dwd.code == 404) return new JSONArray(); // not covered by the DWD
-            return dwd.ok() ? fromBrightSky(new JSONObject(dwd.body)) : null;
+            // 404: not covered by the DWD. The box also holds Prague, Luxembourg, Strasbourg…: try MeteoAlarm next
+            if (dwd.code != 404) return dwd.ok() ? fromBrightSky(new JSONObject(dwd.body)) : null;
+        }
+        JSONObject eu = euMatchFor(euArea, lat, lon);
+        if (eu != null) {
+            HttpResult ma = httpGetResult(MA_FEED_URL + eu.optString("feed"), "application/json");
+            return ma.ok() ? fromMeteoAlarm(new JSONObject(ma.body), eu, lat, lon, System.currentTimeMillis()) : null;
         }
         double d = 0.001;
         HttpResult eccc = httpGetResult(String.format(Locale.US,
@@ -429,6 +441,163 @@ public final class HurricaneAlertHelper {
         return out;
     }
 
+    // ─── MeteoAlarm (EU countries; mirrors eu-alerts.js) ─────────────────
+
+    /** The saved MeteoAlarm areas, or null when none are saved or they were worked out for another place. */
+    static JSONObject euMatchFor(String saved, double lat, double lon) {
+        if (saved == null || saved.isEmpty()) return null;
+        try {
+            JSONObject m = new JSONObject(saved);
+            if (m.optString("feed", "").isEmpty()) return null;
+            if (Math.abs(m.getDouble("lat") - lat) > 0.01 || Math.abs(m.getDouble("lon") - lon) > 0.01) return null;
+            return m;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Feed JSON → NWS-style alert properties for the warnings covering this point (see eu-alerts.js). */
+    static JSONArray fromMeteoAlarm(JSONObject json, JSONObject match, double lat, double lon, long now)
+            throws Exception {
+        java.util.Set<String> codes = new java.util.HashSet<>();
+        JSONArray saved = match.optJSONArray("codes");
+        for (int i = 0; saved != null && i < saved.length(); i++) codes.add(saved.optString(i));
+        String feed = match.optString("feed", "");
+
+        JSONArray out = new JSONArray();
+        JSONArray warnings = json.optJSONArray("warnings");
+        for (int w = 0; warnings != null && w < warnings.length(); w++) {
+            JSONObject wo = warnings.optJSONObject(w);
+            JSONObject alert = wo != null ? wo.optJSONObject("alert") : null;
+            if (alert == null || !"Actual".equals(alert.optString("status"))
+                    || "Cancel".equals(alert.optString("msgType"))) continue;
+            JSONArray infos = alert.optJSONArray("info");
+            JSONObject info = null;
+            for (int i = 0; infos != null && i < infos.length(); i++) {
+                JSONObject cand = infos.optJSONObject(i);
+                if (cand == null) continue;
+                if (info == null) info = cand;
+                if (cand.optString("language", "").toLowerCase(Locale.US).startsWith("en")) {
+                    info = cand;
+                    break;
+                }
+            }
+            if (info == null) continue;
+            long expires = parseIsoMillis(info.optString("expires", ""));
+            if (expires > 0 && expires <= now) continue;
+            int level = awarenessLevel(info);
+            if (level == 1) continue; // green: no particular awareness needed, not a warning
+
+            JSONObject area = null;
+            String where = "";
+            JSONArray areas = info.optJSONArray("area");
+            for (int i = 0; area == null && areas != null && i < areas.length(); i++) {
+                JSONObject ar = areas.optJSONObject(i);
+                if (ar == null) continue;
+                JSONArray geo = ar.optJSONArray("geocode");
+                for (int g = 0; geo != null && g < geo.length(); g++) {
+                    JSONObject gc = geo.optJSONObject(g);
+                    if (gc != null && codes.contains(gc.optString("valueName") + ":" + gc.optString("value"))) {
+                        area = ar;
+                        break;
+                    }
+                }
+                JSONArray polys = ar.optJSONArray("polygon");
+                // No outlines saved for this country (Luxembourg, Sweden, Estonia) and none in the
+                // warning: treat it as covering the whole country rather than never showing it
+                if (codes.isEmpty() && (polys == null || polys.length() == 0)) area = ar;
+                for (int p = 0; area == null && polys != null && p < polys.length(); p++) {
+                    if (inCapPolygon(polys.optString(p), lat, lon)) area = ar;
+                }
+                if (area != null) {
+                    JSONObject first = geo != null ? geo.optJSONObject(0) : null;
+                    where = first != null ? first.optString("valueName") + ":" + first.optString("value")
+                            : ar.optString("areaDesc", "");
+                }
+            }
+            if (area == null) continue;
+
+            String event = info.optString("event", "Weather warning");
+            if (!event.isEmpty()) event = Character.toUpperCase(event.charAt(0)) + event.substring(1);
+            String severity = level == 2 ? "Moderate" : level == 3 ? "Severe" : level == 4 ? "Extreme"
+                    : info.optString("severity", "Unknown");
+            JSONObject a = new JSONObject();
+            // Re-issued warnings get new identifiers; event + severity + area notifies again only when it escalates
+            a.put("id", "ma:" + feed + "|" + event + "|" + severity + "|" + where);
+            a.put("identifier", alert.optString("identifier", ""));
+            a.put("event", event);
+            a.put("severity", severity);
+            a.put("headline", info.optString("headline", ""));
+            a.put("areaDesc", area.optString("areaDesc", ""));
+            a.put("description", info.optString("description", ""));
+            a.put("instruction", info.optString("instruction", ""));
+            a.put("ends", info.optString("expires", ""));
+            a.put("sent", alert.optString("sent", info.optString("effective", "")));
+            a.put("source", "MeteoAlarm");
+            a.put("sender", info.optString("senderName", ""));
+            a.put("web", info.optString("web", ""));
+            out.put(a);
+        }
+        return out;
+    }
+
+    /**
+     * Awareness level from the "awareness_level" parameter ("2; yellow; Moderate"): 1 green to 4 red;
+     * without it, CAP Minor counts as green (1), anything else unknown (0). See eu-alerts.js.
+     */
+    static int awarenessLevel(JSONObject info) {
+        JSONArray params = info.optJSONArray("parameter");
+        for (int i = 0; params != null && i < params.length(); i++) {
+            JSONObject p = params.optJSONObject(i);
+            if (p == null || !"awareness_level".equals(p.optString("valueName"))) continue;
+            try {
+                int n = Integer.parseInt(p.optString("value", "").split(";")[0].trim());
+                if (n >= 1 && n <= 4) return n;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return "Minor".equals(info.optString("severity")) ? 1 : 0;
+    }
+
+    /** CAP polygon: "lat,lon lat,lon …"; ray casting on the point. */
+    static boolean inCapPolygon(String poly, double lat, double lon) {
+        if (poly == null) return false;
+        String[] pairs = poly.trim().split("\\s+");
+        if (pairs.length < 4) return false;
+        double[] ys = new double[pairs.length];
+        double[] xs = new double[pairs.length];
+        try {
+            for (int i = 0; i < pairs.length; i++) {
+                String[] p = pairs[i].split(",");
+                ys[i] = Double.parseDouble(p[0]);
+                xs[i] = Double.parseDouble(p[1]);
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        boolean inside = false;
+        for (int i = 0, j = pairs.length - 1; i < pairs.length; j = i++) {
+            if ((ys[i] > lat) != (ys[j] > lat)
+                    && lon < (xs[j] - xs[i]) * (lat - ys[i]) / (ys[j] - ys[i]) + xs[i]) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    /** ISO 8601 with "Z" or a "+01:00" offset → epoch ms, or -1. (The X pattern needs API 24; minSdk is 23.) */
+    static long parseIsoMillis(String iso) {
+        if (iso == null) return -1;
+        String s = iso.trim().replaceFirst("Z$", "+0000").replaceFirst("([+-]\\d\\d):(\\d\\d)$", "$1$2");
+        try {
+            java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US);
+            java.util.Date d = f.parse(s);
+            return d != null ? d.getTime() : -1;
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
     private static boolean isSevereEvent(String event) {
         if (event == null) return false;
         String e = event.toLowerCase(Locale.US);
@@ -449,6 +618,13 @@ public final class HurricaneAlertHelper {
      * (winter storm, flood watch, high wind, …), and Moderate (advisories) when
      * the user opted in. Minor alerts (frost, small craft, …) are never notified.
      */
+    static boolean shouldNotify(JSONObject props, boolean includeAdvisories) {
+        // MeteoAlarm already rates every warning yellow/orange/red; its event names ("Moderate
+        // rain-flood warning") must not trip the U.S. keyword rule
+        String event = "MeteoAlarm".equals(props.optString("source")) ? "" : props.optString("event", "");
+        return shouldNotify(event, props.optString("severity", ""), includeAdvisories);
+    }
+
     static boolean shouldNotify(String event, String severity, boolean includeAdvisories) {
         if (isSevereEvent(event)) return true;
         if ("Extreme".equals(severity) || "Severe".equals(severity)) return true;

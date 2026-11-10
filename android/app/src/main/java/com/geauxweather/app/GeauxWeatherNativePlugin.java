@@ -226,7 +226,8 @@ public class GeauxWeatherNativePlugin extends Plugin {
                     || host.endsWith(".open-meteo.com")
                     || host.equals("open-meteo.com")
                     || host.equals("api.weather.gc.ca")   // Environment Canada alerts
-                    || host.equals("api.brightsky.dev");  // DWD (Germany) alerts
+                    || host.equals("api.brightsky.dev")   // DWD (Germany) alerts
+                    || host.equals("feeds.meteoalarm.org"); // MeteoAlarm (other EU countries) alerts
         } catch (Exception e) {
             return false;
         }
