@@ -1009,6 +1009,13 @@ body.sky-mood-default {
   max-width: none;
   width: 100%;
 }
+/* Line up with the label (.small adds padding), and no empty line under the field before a message */
+#owm-key-status {
+  padding: 0;
+}
+#owm-key-status:empty {
+  display: none;
+}
 .owm-key-row {
   display: flex;
   gap: 8px;
