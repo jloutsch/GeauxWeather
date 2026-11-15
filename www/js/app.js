@@ -68,8 +68,13 @@
     const btn = document.querySelector('.nav-btn[data-screen="' + name + '"]');
     if (btn) btn.classList.add('active');
   }
-  // Used by severe-alert deep links from native notifications
-  window.__geauxShowScreen = showScreen;
+  /** Screen a notification asked for; boot() opens it instead of Today when it came first */
+  let requestedScreen = null;
+  // Used by severe-alert and precipitation deep links from native notifications
+  window.__geauxShowScreen = function (name) {
+    requestedScreen = name;
+    showScreen(name);
+  };
 
   navBtns.forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -1622,7 +1627,7 @@
     // Fork settings (settings-extra.js): Preferences → screens, before anything reads them
     if (window.GeauxSettingsExtra) await window.GeauxSettingsExtra.beforeBoot();
     loadPrefs();
-    showScreen('today');
+    showScreen(requestedScreen || 'today');
 
     if (window.PureSkyMaps && window.PureSkyMaps.onPinDrop) {
       window.PureSkyMaps.onPinDrop(onMapPinDrop);
