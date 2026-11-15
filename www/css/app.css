@@ -1009,6 +1009,21 @@ body.sky-mood-default {
   max-width: none;
   width: 100%;
 }
+.owm-key-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.owm-key-row input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.95rem;
+}
 .setting-label-row {
   display: flex;
   justify-content: space-between;

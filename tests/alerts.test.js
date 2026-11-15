@@ -207,7 +207,7 @@ test('Bright Sky (DWD) alerts become NWS-style alerts; test messages are dropped
 });
 
 /** Loads hurricane-alerts.js with a fake PureSkyNet that answers by host. */
-function loadWithNet(answers, euAlerts) {
+function loadWithNet(answers, euAlerts, owmKey) {
   const src = fs.readFileSync(path.join(__dirname, '..', 'www', 'js', 'hurricane-alerts.js'), 'utf8');
   const noop = () => {};
   const asked = [];
@@ -225,7 +225,7 @@ function loadWithNet(answers, euAlerts) {
       },
     },
     console, URL, setTimeout: noop, setInterval: noop, clearInterval: noop,
-    localStorage: { getItem: () => null, setItem: noop },
+    localStorage: { getItem: (k) => (k === 'owm_key' && owmKey) || null, setItem: noop },
     document: { readyState: 'complete', getElementById: () => null, querySelector: () => null, addEventListener: noop },
   };
   vm.runInNewContext(src, sandbox);
@@ -312,4 +312,137 @@ test('a Canadian tornado warning opens the radar, not the U.S.-only Tornado laye
   assert.equal(ca[0].detail.layer, 'radar');
   const us = A.diffAndCollect(loc, [{ id: 'u', event: 'Tornado Warning', severity: 'Extreme' }], [], { listAll: true });
   assert.equal(us[0].detail.layer, 'tornado');
+});
+
+// ─── OpenWeatherMap (optional, the user's own key) ─────────────────────────
+
+const NOW_S = Math.floor(Date.now() / 1000);
+const OWM = {
+  lat: -33.87,
+  lon: 151.21,
+  alerts: [
+    {
+      sender_name: 'Australian Government Bureau of Meteorology',
+      event: 'Severe Thunderstorm Warning',
+      start: NOW_S - 3600,
+      end: NOW_S + 3600,
+      description: 'Damaging winds and large hail.',
+      tags: ['Thunderstorm'],
+    },
+    { sender_name: 'Met Office', event: 'Yellow warning of rain', start: NOW_S - 600, end: NOW_S + 7200, description: 'Rain.' },
+    { sender_name: 'Old', event: 'Flood Warning', start: NOW_S - 9000, end: NOW_S - 60, description: 'Over.' },
+  ],
+};
+
+test('OpenWeatherMap alert names map to a severity: colour first, then the kind of message', () => {
+  assert.equal(A.owmSeverity('Red warning of wind'), 'Extreme');
+  assert.equal(A.owmSeverity('Amber warning of snow'), 'Severe');
+  assert.equal(A.owmSeverity('Orange Thunderstorm warning'), 'Severe');
+  assert.equal(A.owmSeverity('Yellow warning of rain'), 'Moderate');
+  assert.equal(A.owmSeverity('Yellow Flood Warning'), 'Moderate'); // colour wins over the U.S. keyword
+  assert.equal(A.owmSeverity('Severe Thunderstorm Warning'), 'Severe');
+  assert.equal(A.owmSeverity('Heavy rain warning'), 'Severe');
+  assert.equal(A.owmSeverity('Tropical Cyclone Advice'), 'Severe'); // storm keyword
+  assert.equal(A.owmSeverity('Heavy rain advisory'), 'Moderate');
+  assert.equal(A.owmSeverity('Hydrological information'), 'Minor');
+});
+
+test('OpenWeatherMap alerts become NWS-style alerts; ended ones are dropped', () => {
+  const out = A.fromOwm(OWM);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].event, 'Severe Thunderstorm Warning');
+  assert.equal(out[0].severity, 'Severe');
+  assert.equal(out[0].source, 'OpenWeatherMap');
+  assert.equal(out[0].sender, 'Australian Government Bureau of Meteorology');
+  assert.equal(out[0].description, 'Damaging winds and large hail.');
+  assert.equal(out[0].sent, new Date((NOW_S - 3600) * 1000).toISOString());
+  assert.equal(out[0].ends, new Date((NOW_S + 3600) * 1000).toISOString());
+  // Same sender + event + start on every check → notifies once
+  assert.equal(out[0].id, A.fromOwm(OWM)[0].id);
+  assert.equal(A.fromOwm({}).length, 0);
+});
+
+test('OpenWeatherMap alerts notify by their mapped severity, not by U.S. event keywords', () => {
+  const yellow = A.fromOwm({ alerts: [{ sender_name: 'Met Office', event: 'Yellow Flood Warning', start: NOW_S, end: NOW_S + 60 }] })[0];
+  assert.equal(A.shouldNotify(yellow, 'warnings'), false);
+  assert.ok(A.shouldNotify(yellow, 'advisories'));
+});
+
+test('with a key, places outside the U.S., Canada and the MeteoAlarm countries use OpenWeatherMap', async () => {
+  const eu = { fetchAlerts: async () => null };
+  const au = loadWithNet({ 'api.weather.gov': 400, 'api.openweathermap.org': OWM }, eu, 'k123');
+  const out = await au.A.fetchPointAlerts(-33.87, 151.21); // Sydney
+  assert.deepEqual(au.asked, ['api.weather.gov', 'api.openweathermap.org']);
+  assert.equal(out[0].source, 'OpenWeatherMap');
+});
+
+test('without a key, those places stay on the keyless chain (Environment Canada, empty there)', async () => {
+  const eu = { fetchAlerts: async () => null };
+  const au = loadWithNet({ 'api.weather.gov': 400, 'api.weather.gc.ca': { features: [] } }, eu);
+  assert.deepEqual(Array.from(await au.A.fetchPointAlerts(-33.87, 151.21)), []);
+  assert.deepEqual(au.asked, ['api.weather.gov', 'api.weather.gc.ca']);
+});
+
+test('with a key, Canada stays on Environment Canada and the EU on MeteoAlarm', async () => {
+  const none = { fetchAlerts: async () => null };
+  const ca = loadWithNet({ 'api.weather.gov': 400, 'api.weather.gc.ca': ECCC }, none, 'k123');
+  assert.equal((await ca.A.fetchPointAlerts(53.25, -132.07))[0].event, 'Winter Storm Warning');
+  assert.deepEqual(ca.asked, ['api.weather.gov', 'api.weather.gc.ca']);
+
+  const ma = { fetchAlerts: async () => [{ id: 'ma:x', event: 'Yellow Wind', severity: 'Moderate', source: 'MeteoAlarm' }] };
+  const fr = loadWithNet({ 'api.weather.gov': 400 }, ma, 'k123');
+  assert.equal((await fr.A.fetchPointAlerts(48.86, 2.35))[0].source, 'MeteoAlarm');
+  assert.deepEqual(fr.asked, ['api.weather.gov']);
+});
+
+test('a rejected key (401) falls back to the keyless chain; other OpenWeatherMap failures are failures', async () => {
+  const eu = { fetchAlerts: async () => null };
+  const bad = loadWithNet({ 'api.weather.gov': 400, 'api.openweathermap.org': 401, 'api.weather.gc.ca': { features: [] } }, eu, 'bad');
+  assert.deepEqual(Array.from(await bad.A.fetchPointAlerts(-33.87, 151.21)), []);
+  assert.deepEqual(bad.asked, ['api.weather.gov', 'api.openweathermap.org', 'api.weather.gc.ca']);
+
+  const down = loadWithNet({ 'api.weather.gov': 400, 'api.openweathermap.org': 503 }, eu, 'k123');
+  await assert.rejects(down.A.fetchPointAlerts(-33.87, 151.21), /HTTP 503/);
+});
+
+test('OpenWeatherMap alerts carry their sender into the alert detail and open the radar, not the Tornado layer', () => {
+  const loc = { lat: -33.87, lon: 151.21, label: 'Sydney' };
+  const tornado = A.fromOwm({ alerts: [{ sender_name: 'BoM', event: 'Tornado Warning', start: NOW_S, end: NOW_S + 60 }] });
+  const d = A.diffAndCollect(loc, tornado, [], { listAll: true })[0].detail;
+  assert.equal(d.source, 'OpenWeatherMap');
+  assert.equal(d.sender, 'BoM');
+  assert.equal(d.layer, 'radar');
+});
+
+// Regression: ISSUE-002 — OpenWeatherMap alerts have no area name, so the place showed twice ("Sydney · near Sydney")
+// Found by /qa on 2026-11-15
+// Report: .gstack/qa-reports/qa-report-owm-key-2026-11-15.md
+test('an alert without an area name shows the place once', () => {
+  const loc = { lat: -33.87, lon: 151.21, label: 'Sydney' };
+  const props = A.fromOwm({ alerts: [{ sender_name: 'BoM', event: 'Severe Thunderstorm Warning', start: NOW_S, end: NOW_S + 60 }] });
+  const a = A.diffAndCollect(loc, props, [], { listAll: true })[0];
+  assert.equal(a.body, 'Severe · near Sydney');
+  assert.equal(a.detail.area, '');
+  const nws = A.diffAndCollect(loc, [{ id: 'n', event: 'Flood Warning', severity: 'Severe', areaDesc: 'Middlesex, MA' }], [], { listAll: true })[0];
+  assert.equal(nws.body, 'Severe · Middlesex, MA · near Sydney');
+});
+
+// Regression: ISSUE-004 — Brazil's INMET names alerts in Portuguese ("Tempestade"); unmatched names fell to Minor and never notified
+// Found by /qa on 2026-11-15 (live OpenWeatherMap key, São Paulo)
+// Report: .gstack/qa-reports/qa-report-owm-key-2026-11-15.md
+test('OpenWeatherMap alert names the rules do not recognise default to Moderate, not Minor', () => {
+  const inmet = A.fromOwm({ alerts: [{
+    sender_name: 'Instituto Nacional de Meteorologia', event: 'Tempestade', start: NOW_S - 600, end: NOW_S + 3600,
+    description: 'Chuva entre 20 e 30 mm/h ou até 50 mm/dia, ventos intensos (40-60 km/h), e queda de granizo. Baixo risco de corte de energia elétrica.',
+    tags: ['Wind'],
+  }] })[0];
+  assert.equal(inmet.severity, 'Moderate');
+  assert.equal(A.shouldNotify(inmet, 'warnings'), false);
+  assert.ok(A.shouldNotify(inmet, 'advisories'));
+  assert.equal(A.owmSeverity('Alerta roja por lluvias'), 'Extreme');
+  assert.equal(A.owmSeverity('Aviso laranja de chuva'), 'Severe');
+  assert.equal(A.owmSeverity('Alerta naranja'), 'Severe');
+  assert.equal(A.owmSeverity('Aviso amarelo'), 'Moderate');
+  assert.equal(A.owmSeverity('Coastal flood statement'), 'Minor');
+  assert.equal(A.owmSeverity('Fire weather outlook'), 'Minor');
 });

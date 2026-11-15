@@ -235,6 +235,15 @@
               <option value="advisories">Warnings, watches &amp; advisories</option>
             </select>
           </label>
+          <div class="setting-row setting-row-stack">
+            <label for="owm-key-input">OpenWeatherMap key <small class="muted">· optional: alerts outside the U.S., Canada and the EU</small></label>
+            <span class="owm-key-row">
+              <input type="password" id="owm-key-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your API key" />
+              <button type="button" id="owm-key-save" class="save-place-btn">Save</button>
+              <button type="button" id="owm-key-remove" class="save-place-btn saved" hidden>Remove</button>
+            </span>
+            <span class="muted small" id="owm-key-status" aria-live="polite"></span>
+          </div>
           <label class="setting-row app-only">
             <span>Rain or snow in the next hour</span>
             <input type="checkbox" id="nexthour-notify-toggle" />
@@ -322,7 +331,7 @@
           </div>
         </div>
         <p class="settings-hint muted small" id="hurricane-alerts-hint">
-          Official warnings &amp; watches (U.S. NWS, Environment Canada, Germany’s DWD, other EU countries via MeteoAlarm: tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for your home or default location, checked about hourly, and every 15 minutes while a storm watch or warning is active. Tap a notification to open the map and alert details.
+          Official warnings &amp; watches (U.S. NWS, Environment Canada, Germany’s DWD, other EU countries via MeteoAlarm, elsewhere via OpenWeatherMap with your own key: tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for your home or default location, checked about hourly, and every 15 minutes while a storm watch or warning is active. Tap a notification to open the map and alert details.
         </p>
         <h2 class="section-title" style="margin-top:4px">Today screen</h2>
         <div class="settings-group" id="today-sections-settings"></div>
