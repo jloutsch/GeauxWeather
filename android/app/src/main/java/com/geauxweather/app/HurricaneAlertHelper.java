@@ -276,7 +276,7 @@ public final class HurricaneAlertHelper {
             }
             String key = "nws:" + alertId;
             String headline = props.optString("headline", event);
-            String area = props.optString("areaDesc", placeLabel);
+            String area = props.optString("areaDesc", "");
             String severity = props.optString("severity", "");
 
             JSONObject fp = new JSONObject();
@@ -288,11 +288,7 @@ public final class HurricaneAlertHelper {
             if (prev.optJSONObject(key) != null) continue;
 
             String title = event;
-            String text = area;
-            if (!severity.isEmpty()) text = severity + " · " + text;
-            if (placeLabel != null && !placeLabel.isEmpty()) {
-                text = text + " · near " + placeLabel;
-            }
+            String text = notificationText(severity, area, placeLabel);
             String description = props.optString("description", "");
             String instruction = props.optString("instruction", "");
             String ends = props.optString("ends", props.optString("expires", ""));
@@ -382,6 +378,18 @@ public final class HurricaneAlertHelper {
     /** Germany, roughly; Bright Sky answers "not covered" for the bits of neighbours this box includes. */
     static boolean inGermany(double lat, double lon) {
         return lat >= 47.2 && lat <= 55.1 && lon >= 5.8 && lon <= 15.1;
+    }
+
+    /** "Severe · Middlesex, MA · near Stoneham", skipping empty parts (OpenWeatherMap alerts have no area name). */
+    static String notificationText(String severity, String area, String placeLabel) {
+        StringBuilder b = new StringBuilder();
+        String near = placeLabel == null || placeLabel.isEmpty() ? "" : "near " + placeLabel;
+        for (String part : new String[] {severity, area, near}) {
+            if (part == null || part.isEmpty()) continue;
+            if (b.length() > 0) b.append(" · ");
+            b.append(part);
+        }
+        return b.toString();
     }
 
     /** Canada, roughly (also takes in west Greenland). Inside it Environment Canada stays the source. */

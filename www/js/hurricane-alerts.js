@@ -452,11 +452,8 @@
       if (prev[key]) continue;
       const instruction = p.instruction || '';
       const description = p.description || '';
-      let body =
-        (p.severity ? p.severity + ' · ' : '') +
-        (p.areaDesc || place) +
-        ' · near ' +
-        place;
+      // OpenWeatherMap alerts have no area name: show the place once, not "Sydney · near Sydney"
+      let body = [p.severity, p.areaDesc, 'near ' + place].filter(Boolean).join(' · ');
       if (instruction) body += '\n\n' + String(instruction).slice(0, 400);
       else if (description) body += '\n\n' + String(description).slice(0, 400);
       alerts.push({
@@ -468,7 +465,7 @@
           key: key,
           event: p.event || 'Severe weather',
           headline: p.headline || p.event || '',
-          area: p.areaDesc || place,
+          area: p.areaDesc || '',
           severity: p.severity || '',
           description: String(description).slice(0, 1200),
           instruction: String(instruction).slice(0, 800),

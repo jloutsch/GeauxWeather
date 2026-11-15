@@ -59,6 +59,17 @@ public class OwmAlertsTest {
         assertTrue(HurricaneAlertHelper.shouldNotify(yellow, true));
     }
 
+    // Regression: ISSUE-002 — OpenWeatherMap alerts have no area name; the notification read "Severe ·  · near Sydney"
+    // Found by /qa on 2026-11-15
+    // Report: .gstack/qa-reports/qa-report-owm-key-2026-11-15.md
+    @Test
+    public void notificationTextSkipsAMissingAreaName() {
+        assertEquals("Severe · near Sydney", HurricaneAlertHelper.notificationText("Severe", "", "Sydney"));
+        assertEquals("Severe · Middlesex, MA · near Stoneham",
+                HurricaneAlertHelper.notificationText("Severe", "Middlesex, MA", "Stoneham"));
+        assertEquals("Middlesex, MA", HurricaneAlertHelper.notificationText("", "Middlesex, MA", null));
+    }
+
     @Test
     public void canadaBoxKeepsEnvironmentCanada() {
         assertTrue(HurricaneAlertHelper.inCanada(53.25, -132.07)); // Haida Gwaii

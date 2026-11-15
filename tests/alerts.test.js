@@ -413,3 +413,16 @@ test('OpenWeatherMap alerts carry their sender into the alert detail and open th
   assert.equal(d.sender, 'BoM');
   assert.equal(d.layer, 'radar');
 });
+
+// Regression: ISSUE-002 — OpenWeatherMap alerts have no area name, so the place showed twice ("Sydney · near Sydney")
+// Found by /qa on 2026-11-15
+// Report: .gstack/qa-reports/qa-report-owm-key-2026-11-15.md
+test('an alert without an area name shows the place once', () => {
+  const loc = { lat: -33.87, lon: 151.21, label: 'Sydney' };
+  const props = A.fromOwm({ alerts: [{ sender_name: 'BoM', event: 'Severe Thunderstorm Warning', start: NOW_S, end: NOW_S + 60 }] });
+  const a = A.diffAndCollect(loc, props, [], { listAll: true })[0];
+  assert.equal(a.body, 'Severe · near Sydney');
+  assert.equal(a.detail.area, '');
+  const nws = A.diffAndCollect(loc, [{ id: 'n', event: 'Flood Warning', severity: 'Severe', areaDesc: 'Middlesex, MA' }], [], { listAll: true })[0];
+  assert.equal(nws.body, 'Severe · Middlesex, MA · near Sydney');
+});
