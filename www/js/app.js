@@ -969,6 +969,12 @@
    * - GPS on / available → refresh current GPS as home
    * - GPS off → refresh default city (or last home)
    */
+  /** True when refresh moved home by more than ~1 km, so the map should follow it */
+  function homeMoved(prev, next) {
+    if (!prev || prev.lat == null || prev.lon == null) return true;
+    return Math.abs(prev.lat - next.lat) > 0.01 || Math.abs(prev.lon - next.lon) > 0.01;
+  }
+
   async function refreshHome() {
     setStatus('Refreshing…');
     try {
@@ -980,11 +986,8 @@
       } catch (_) {}
       homeFromGps = true;
       mapPinLoc = null;
-      await loadHomeWeather(
-        { lat: pos.lat, lon: pos.lon, label: label, source: 'gps' },
-        false,
-        { forceMapView: false }
-      );
+      const gpsLoc = { lat: pos.lat, lon: pos.lon, label: label, source: 'gps' };
+      await loadHomeWeather(gpsLoc, false, { forceMapView: homeMoved(homeLoc, gpsLoc) });
       setStatus('Updated from GPS', 2000);
       return;
     } catch (err) {
@@ -1004,7 +1007,7 @@
       } catch (_) {}
     }
     if (loc && loc.lat != null) {
-      await loadHomeWeather(loc, false, { forceMapView: false });
+      await loadHomeWeather(loc, false, { forceMapView: homeMoved(homeLoc, loc) });
       setStatus('Updated default location', 2000);
     } else {
       setStatus('No default location — search or use GPS', 4000);
