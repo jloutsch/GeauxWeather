@@ -69,6 +69,8 @@ public final class HurricaneAlertHelper {
     /** {lat, lon, feed, codes}: the MeteoAlarm areas for the home location, saved by eu-alerts.js. */
     private static final String KEY_EU_AREA = "geauxweather_eu_area";
     private static final String MA_FEED_URL = "https://feeds.meteoalarm.org/api/v1/warnings/feeds-";
+    /** The user's own OpenWeatherMap key, saved by Settings (never shipped in the app). */
+    private static final String KEY_OWM = "geauxweather_owm_key";
     private static final int BASE_NOTIF_ID = 7000;
     /** Tropical systems farther than this from home are ignored (miles). */
     private static final double TROPICAL_RADIUS_MI = 500.0;
@@ -258,7 +260,7 @@ public final class HurricaneAlertHelper {
             boolean quiet
     ) throws Exception {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        JSONArray alerts = fetchPointAlerts(lat, lon, prefs.getString(KEY_EU_AREA, null));
+        JSONArray alerts = fetchPointAlerts(lat, lon, prefs.getString(KEY_EU_AREA, null), prefs.getString(KEY_OWM, ""));
         if (alerts == null) return false;
         boolean includeAdvisories = "advisories".equals(prefs.getString(KEY_LEVEL, "warnings"));
 
@@ -336,10 +338,11 @@ public final class HurricaneAlertHelper {
     /**
      * Alerts for a point as NWS-style properties, or null when the feed failed. NWS covers the U.S.
      * and answers 400 for a point it doesn't; then the DWD (via Bright Sky) in Germany, MeteoAlarm in
-     * the other EU countries (areas worked out by eu-alerts.js and saved as euArea), else Environment
-     * Canada (empty outside Canada). Same logic as fetchPointAlerts in hurricane-alerts.js.
+     * the other EU countries (areas worked out by eu-alerts.js and saved as euArea), OpenWeatherMap
+     * elsewhere outside Canada when the user saved a key, else Environment Canada (empty outside
+     * Canada). Same logic as fetchPointAlerts in hurricane-alerts.js.
      */
-    static JSONArray fetchPointAlerts(double lat, double lon, String euArea) throws Exception {
+    static JSONArray fetchPointAlerts(double lat, double lon, String euArea, String owmKey) throws Exception {
         HttpResult nws = httpGetResult(String.format(Locale.US,
                 "https://api.weather.gov/alerts/active?status=actual&point=%.4f,%.4f", lat, lon),
                 "application/geo+json,application/json");
@@ -364,6 +367,11 @@ public final class HurricaneAlertHelper {
             HttpResult ma = httpGetResult(MA_FEED_URL + eu.optString("feed"), "application/json");
             return ma.ok() ? fromMeteoAlarm(new JSONObject(ma.body), eu, lat, lon, System.currentTimeMillis()) : null;
         }
+        if (owmKey != null && !owmKey.isEmpty() && !inCanada(lat, lon)) {
+            HttpResult owm = httpGetResult(owmUrl(lat, lon, owmKey), "application/json");
+            // 401: key rejected (or no One Call 3.0 plan) → keyless sources; anything else is a real failure
+            if (owm.code != 401) return owm.ok() ? fromOwm(new JSONObject(owm.body), System.currentTimeMillis()) : null;
+        }
         double d = 0.001;
         HttpResult eccc = httpGetResult(String.format(Locale.US,
                 "https://api.weather.gc.ca/collections/weather-alerts/items?f=json&lang=en&bbox=%.4f,%.4f,%.4f,%.4f",
@@ -374,6 +382,73 @@ public final class HurricaneAlertHelper {
     /** Germany, roughly; Bright Sky answers "not covered" for the bits of neighbours this box includes. */
     static boolean inGermany(double lat, double lon) {
         return lat >= 47.2 && lat <= 55.1 && lon >= 5.8 && lon <= 15.1;
+    }
+
+    /** Canada, roughly (also takes in west Greenland). Inside it Environment Canada stays the source. */
+    static boolean inCanada(double lat, double lon) {
+        return lat >= 41.6 && lat <= 83.2 && lon >= -141.1 && lon <= -52.5;
+    }
+
+    static String owmUrl(double lat, double lon, String key) {
+        String k;
+        try {
+            k = java.net.URLEncoder.encode(key, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            k = key;
+        }
+        return String.format(Locale.US,
+                "https://api.openweathermap.org/data/3.0/onecall?exclude=current,minutely,hourly,daily&lat=%.4f&lon=%.4f&appid=",
+                lat, lon) + k;
+    }
+
+    /**
+     * OpenWeatherMap passes on each national service's alerts without a severity, so it is read from the
+     * name: a colour first (UK, EU style), then storm keywords and "warning"/"watch", then "advisory"; else
+     * Minor. Same as owmSeverity in hurricane-alerts.js.
+     */
+    static String owmSeverity(String event) {
+        String e = event == null ? "" : event.toLowerCase(Locale.US);
+        if (e.matches(".*\\b(red|extreme)\\b.*")) return "Extreme";
+        if (e.matches(".*\\byellow\\b.*")) return "Moderate";
+        if (e.matches(".*\\b(amber|orange)\\b.*") || isSevereEvent(e) || e.contains("tropical cyclone")) return "Severe";
+        if (e.matches(".*\\b(warning|watch|emergency)\\b.*")) return "Severe";
+        return e.matches(".*\\badvisory\\b.*") ? "Moderate" : "Minor";
+    }
+
+    private static String isoUtc(long epochSeconds) {
+        java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+        f.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        return f.format(new java.util.Date(epochSeconds * 1000L));
+    }
+
+    /** OpenWeatherMap One Call 3.0 alerts → NWS-style properties (ended ones dropped). */
+    static JSONArray fromOwm(JSONObject json, long nowMs) throws Exception {
+        JSONArray out = new JSONArray();
+        JSONArray alerts = json.optJSONArray("alerts");
+        for (int i = 0; alerts != null && i < alerts.length(); i++) {
+            JSONObject al = alerts.optJSONObject(i);
+            if (al == null) continue;
+            long start = al.optLong("start", 0);
+            long end = al.optLong("end", 0);
+            if (end > 0 && end * 1000L <= nowMs) continue;
+            String sender = al.optString("sender_name", "");
+            String event = al.optString("event", "");
+            JSONObject a = new JSONObject();
+            // Same sender + event + start on every check, so each alert notifies once
+            a.put("id", "owm:" + sender + "|" + event + "|" + (start > 0 ? String.valueOf(start) : ""));
+            a.put("event", event.isEmpty() ? "Weather warning" : event);
+            a.put("severity", owmSeverity(event));
+            a.put("headline", event);
+            a.put("areaDesc", "");
+            a.put("description", al.optString("description", ""));
+            a.put("instruction", "");
+            a.put("ends", end > 0 ? isoUtc(end) : "");
+            a.put("sent", start > 0 ? isoUtc(start) : "");
+            a.put("source", "OpenWeatherMap");
+            a.put("sender", sender);
+            out.put(a);
+        }
+        return out;
     }
 
     /** "winter storm warning" → "Winter Storm Warning" (also after hyphens). */
@@ -620,8 +695,10 @@ public final class HurricaneAlertHelper {
      */
     static boolean shouldNotify(JSONObject props, boolean includeAdvisories) {
         // MeteoAlarm already rates every warning yellow/orange/red; its event names ("Moderate
-        // rain-flood warning") must not trip the U.S. keyword rule
-        String event = "MeteoAlarm".equals(props.optString("source")) ? "" : props.optString("event", "");
+        // rain-flood warning") must not trip the U.S. keyword rule. OpenWeatherMap severities already include it.
+        String source = props.optString("source");
+        boolean rated = "MeteoAlarm".equals(source) || "OpenWeatherMap".equals(source);
+        String event = rated ? "" : props.optString("event", "");
         return shouldNotify(event, props.optString("severity", ""), includeAdvisories);
     }
 

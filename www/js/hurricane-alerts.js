@@ -208,8 +208,9 @@
    */
   function shouldNotify(props, level) {
     // MeteoAlarm already rates every warning yellow/orange/red; its event names ("Moderate rain-flood
-    // warning") must not trip the U.S. keyword rule
-    if (props.source !== 'MeteoAlarm' && isSevereEvent(props.event)) return true;
+    // warning") must not trip the U.S. keyword rule. OpenWeatherMap severities already include it (owmSeverity).
+    const rated = props.source === 'MeteoAlarm' || props.source === 'OpenWeatherMap';
+    if (!rated && isSevereEvent(props.event)) return true;
     if (props.severity === 'Extreme' || props.severity === 'Severe') return true;
     return level === 'advisories' && props.severity === 'Moderate';
   }
@@ -299,10 +300,67 @@
       }));
   }
 
+  /** The user's own OpenWeatherMap key (Settings), or '' — read natively as geauxweather_owm_key. */
+  const OWM_KEY = 'owm_key';
+  function owmKey() {
+    try {
+      return localStorage.getItem(OWM_KEY) || '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function owmUrl(lat, lon, key) {
+    return (
+      'https://api.openweathermap.org/data/3.0/onecall?exclude=current,minutely,hourly,daily&lat=' +
+      lat.toFixed(4) + '&lon=' + lon.toFixed(4) + '&appid=' + encodeURIComponent(key)
+    );
+  }
+
+  /** Canada, roughly (also takes in west Greenland). Inside it Environment Canada stays the source. */
+  function inCanada(lat, lon) {
+    return lat >= 41.6 && lat <= 83.2 && lon >= -141.1 && lon <= -52.5;
+  }
+
+  /**
+   * OpenWeatherMap passes on each national service's alerts without a severity, so it is read from the name:
+   * a colour first (UK, EU style), then storm keywords and "warning"/"watch", then "advisory"; else Minor.
+   */
+  function owmSeverity(event) {
+    const e = (event || '').toLowerCase();
+    if (/\b(red|extreme)\b/.test(e)) return 'Extreme';
+    if (/\byellow\b/.test(e)) return 'Moderate';
+    if (/\b(amber|orange)\b/.test(e) || isSevereEvent(e) || /tropical cyclone/.test(e)) return 'Severe';
+    if (/\b(warning|watch|emergency)\b/.test(e)) return 'Severe';
+    return /\badvisory\b/.test(e) ? 'Moderate' : 'Minor';
+  }
+
+  /** OpenWeatherMap One Call 3.0 alerts → NWS-style properties (ended ones dropped). */
+  function fromOwm(json) {
+    const now = Date.now();
+    return ((json && json.alerts) || [])
+      .filter((a) => !a.end || a.end * 1000 > now)
+      .map((a) => ({
+        // Same sender + event + start on every check, so each alert notifies once
+        id: 'owm:' + (a.sender_name || '') + '|' + (a.event || '') + '|' + (a.start || ''),
+        event: a.event || 'Weather warning',
+        severity: owmSeverity(a.event),
+        headline: a.event || '',
+        areaDesc: '',
+        description: a.description || '',
+        instruction: '',
+        ends: a.end ? new Date(a.end * 1000).toISOString() : '',
+        sent: a.start ? new Date(a.start * 1000).toISOString() : '',
+        source: 'OpenWeatherMap',
+        sender: a.sender_name || '',
+      }));
+  }
+
   /**
    * Alerts for a point as NWS-style properties: NWS in the U.S.; outside it (NWS answers 400 for a point
    * it doesn't cover) the DWD via Bright Sky in Germany, MeteoAlarm in the other EU countries
-   * (eu-alerts.js), else Environment Canada (empty outside Canada).
+   * (eu-alerts.js), OpenWeatherMap elsewhere outside Canada when the user saved a key, else Environment
+   * Canada (empty outside Canada).
    */
   async function fetchPointAlerts(lat, lon) {
     const q = encodeURIComponent(lat.toFixed(4) + ',' + lon.toFixed(4));
@@ -326,6 +384,15 @@
     if (eu) {
       const out = await eu.fetchAlerts(lat, lon, netFetch);
       if (out) return out;
+    }
+    const key = owmKey();
+    if (key && !inCanada(lat, lon)) {
+      try {
+        return fromOwm(await netFetch(owmUrl(lat, lon, key), 'json'));
+      } catch (e) {
+        // 401: key rejected (or no One Call 3.0 plan) → keyless sources; anything else is a real failure
+        if (!/HTTP 401\b/.test(String(e && e.message))) throw e;
+      }
     }
     const d = 0.001;
     return fromEccc(
@@ -693,6 +760,70 @@
         if (isEnabled()) checkNow();
       });
     }
+    wireOwmKey();
+  }
+
+  /** Mirror the key to Preferences so the native background check reads it ('' removes it). */
+  async function storeOwmKey(key) {
+    if (key) localStorage.setItem(OWM_KEY, key);
+    else localStorage.removeItem(OWM_KEY);
+    try {
+      const prefs = global.Capacitor && global.Capacitor.Plugins && global.Capacitor.Plugins.Preferences;
+      if (prefs) {
+        if (key) await prefs.set({ key: 'geauxweather_owm_key', value: key });
+        else await prefs.remove({ key: 'geauxweather_owm_key' });
+      }
+    } catch (e) {
+      console.warn('OpenWeatherMap key prefs write skipped'); // never log the key
+    }
+  }
+
+  /** Settings → OpenWeatherMap key: checked once on save; a 401 is not saved. */
+  function wireOwmKey() {
+    const input = document.getElementById('owm-key-input');
+    const save = document.getElementById('owm-key-save');
+    const remove = document.getElementById('owm-key-remove');
+    const status = document.getElementById('owm-key-status');
+    if (!input || !save || !remove || !status) return;
+    function show(msg) {
+      const key = owmKey();
+      remove.hidden = !key;
+      status.textContent = msg || (key ? 'Key saved (ends in ' + key.slice(-4) + ').' : '');
+    }
+    show();
+    save.addEventListener('click', async function () {
+      const key = input.value.trim();
+      if (!key) {
+        show('Paste a key first.');
+        return;
+      }
+      save.disabled = true;
+      show('Checking key…');
+      const loc = (await resolveAlertLocation()) || { lat: 51.5, lon: -0.13 };
+      let msg;
+      try {
+        await netFetch(owmUrl(loc.lat, loc.lon, key), 'json');
+        await storeOwmKey(key);
+        msg = 'Key works. Alerts outside the U.S., Canada and the EU now come from OpenWeatherMap.';
+      } catch (e) {
+        const m = String((e && e.message) || '');
+        if (/HTTP 401\b/.test(m)) {
+          msg =
+            'Key not accepted. Alerts need the One Call 3.0 subscription ("One Call by Call"), and a new key can take up to 2 hours to start working.';
+        } else {
+          await storeOwmKey(key);
+          msg = 'Saved, but the key could not be checked now (' + (m || 'no connection') + ').';
+        }
+      }
+      save.disabled = false;
+      if (owmKey() === key) input.value = '';
+      show(msg);
+      if (owmKey() && isEnabled()) checkNow();
+    });
+    remove.addEventListener('click', async function () {
+      await storeOwmKey('');
+      show('Key removed. Alerts use the keyless sources again.');
+    });
   }
 
   function updateHint() {
@@ -702,12 +833,12 @@
       if (!hint) return;
       if (loc && loc.label) {
         hint.textContent =
-          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD, other EU countries via MeteoAlarm: tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for ' +
+          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD, other EU countries via MeteoAlarm, elsewhere via OpenWeatherMap with your own key: tornado, thunderstorm, flood, winter storm, high wind…) and nearby hurricanes for ' +
           loc.label +
           ' (home or default), checked about hourly, and every 15 minutes while a storm watch or warning is active. Tap a notification to open the map + details.';
       } else {
         hint.textContent =
-          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD, other EU countries via MeteoAlarm: tornado, thunderstorm, flood, winter storm, high wind…) and nearby tropical storms for your home or default location. Set a location first.';
+          'Official warnings & watches (U.S. NWS, Environment Canada, Germany’s DWD, other EU countries via MeteoAlarm, elsewhere via OpenWeatherMap with your own key: tornado, thunderstorm, flood, winter storm, high wind…) and nearby tropical storms for your home or default location. Set a location first.';
       }
     });
   }
@@ -815,9 +946,8 @@
     if (sheet) sheet.classList.add('hidden');
   }
 
-  /** MeteoAlarm terms, section 5: national service, issue time, link and the delay disclaimer. */
-  function meteoAlarmCredit(detail) {
-    if (detail.source !== 'MeteoAlarm') return '';
+  /** "Issued Nov 15, 5:00 PM by Met Office · " (escaped), or '' when neither is known. */
+  function issuedBy(detail) {
     let issued = '';
     if (detail.sent) {
       const t = new Date(detail.sent);
@@ -826,10 +956,23 @@
       }
     }
     const by = detail.sender ? 'by ' + detail.sender : '';
+    return issued || by ? escapeHtml([issued, by].filter(Boolean).join(' ')) + ' · ' : '';
+  }
+
+  /** OpenWeatherMap passes on the national service's alert: credit both, with the issue time. */
+  function owmCredit(detail) {
+    if (detail.source !== 'OpenWeatherMap') return '';
     return (
-      '<p class="muted small">' +
-      escapeHtml([issued, by].filter(Boolean).join(' ')) +
-      (issued || by ? ' · ' : '') +
+      '<p class="muted small">' + issuedBy(detail) +
+      'via <a href="https://openweathermap.org/" target="_blank" rel="noopener">OpenWeather</a></p>'
+    );
+  }
+
+  /** MeteoAlarm terms, section 5: national service, issue time, link and the delay disclaimer. */
+  function meteoAlarmCredit(detail) {
+    if (detail.source !== 'MeteoAlarm') return '';
+    return (
+      '<p class="muted small">' + issuedBy(detail) +
       'via <a href="https://meteoalarm.org/en/live/" target="_blank" rel="noopener">MeteoAlarm</a></p>' +
       '<p class="muted small">Time delays between this app and the ' +
       '<a href="https://meteoalarm.org/en/live/" target="_blank" rel="noopener">www.meteoalarm.org</a> website ' +
@@ -888,6 +1031,7 @@
       html = '<p class="muted">Open Maps for nearby severe weather layers.</p>';
     }
     html += meteoAlarmCredit(detail);
+    html += owmCredit(detail);
     if (body) body.innerHTML = html;
     if (mapsBtn) {
       mapsBtn.onclick = function () {
@@ -981,6 +1125,9 @@
     fetchPointAlerts: fetchPointAlerts,
     fromEccc: fromEccc,
     fromBrightSky: fromBrightSky,
+    fromOwm: fromOwm,
+    owmSeverity: owmSeverity,
+    owmUrl: owmUrl,
   };
   global.PureSkySevereAlerts = global.PureSkyHurricaneAlerts;
   global.PureSkySevere = global.PureSkyHurricaneAlerts;
