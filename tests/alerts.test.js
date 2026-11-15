@@ -426,3 +426,23 @@ test('an alert without an area name shows the place once', () => {
   const nws = A.diffAndCollect(loc, [{ id: 'n', event: 'Flood Warning', severity: 'Severe', areaDesc: 'Middlesex, MA' }], [], { listAll: true })[0];
   assert.equal(nws.body, 'Severe · Middlesex, MA · near Sydney');
 });
+
+// Regression: ISSUE-004 — Brazil's INMET names alerts in Portuguese ("Tempestade"); unmatched names fell to Minor and never notified
+// Found by /qa on 2026-11-15 (live OpenWeatherMap key, São Paulo)
+// Report: .gstack/qa-reports/qa-report-owm-key-2026-11-15.md
+test('OpenWeatherMap alert names the rules do not recognise default to Moderate, not Minor', () => {
+  const inmet = A.fromOwm({ alerts: [{
+    sender_name: 'Instituto Nacional de Meteorologia', event: 'Tempestade', start: NOW_S - 600, end: NOW_S + 3600,
+    description: 'Chuva entre 20 e 30 mm/h ou até 50 mm/dia, ventos intensos (40-60 km/h), e queda de granizo. Baixo risco de corte de energia elétrica.',
+    tags: ['Wind'],
+  }] })[0];
+  assert.equal(inmet.severity, 'Moderate');
+  assert.equal(A.shouldNotify(inmet, 'warnings'), false);
+  assert.ok(A.shouldNotify(inmet, 'advisories'));
+  assert.equal(A.owmSeverity('Alerta roja por lluvias'), 'Extreme');
+  assert.equal(A.owmSeverity('Aviso laranja de chuva'), 'Severe');
+  assert.equal(A.owmSeverity('Alerta naranja'), 'Severe');
+  assert.equal(A.owmSeverity('Aviso amarelo'), 'Moderate');
+  assert.equal(A.owmSeverity('Coastal flood statement'), 'Minor');
+  assert.equal(A.owmSeverity('Fire weather outlook'), 'Minor');
+});

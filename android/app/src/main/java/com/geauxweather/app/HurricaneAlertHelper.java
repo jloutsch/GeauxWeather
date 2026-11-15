@@ -411,16 +411,19 @@ public final class HurricaneAlertHelper {
 
     /**
      * OpenWeatherMap passes on each national service's alerts without a severity, so it is read from the
-     * name: a colour first (UK, EU style), then storm keywords and "warning"/"watch", then "advisory"; else
-     * Minor. Same as owmSeverity in hurricane-alerts.js.
+     * name: a colour first (UK/EU style, also Portuguese and Spanish), then storm keywords and
+     * "warning"/"watch", then "advisory", then English statements and outlooks as Minor. Anything else is an
+     * official alert these rules don't know (e.g. Brazil's "Tempestade"): Moderate. Same as owmSeverity in
+     * hurricane-alerts.js.
      */
     static String owmSeverity(String event) {
         String e = event == null ? "" : event.toLowerCase(Locale.US);
-        if (e.matches(".*\\b(red|extreme)\\b.*")) return "Extreme";
-        if (e.matches(".*\\byellow\\b.*")) return "Moderate";
-        if (e.matches(".*\\b(amber|orange)\\b.*") || isSevereEvent(e) || e.contains("tropical cyclone")) return "Severe";
+        if (e.matches(".*\\b(red|extreme|vermelho|vermelha|rojo|roja)\\b.*")) return "Extreme";
+        if (e.matches(".*\\b(yellow|amarelo|amarela|amarillo|amarilla)\\b.*")) return "Moderate";
+        if (e.matches(".*\\b(amber|orange|laranja|naranja)\\b.*") || isSevereEvent(e) || e.contains("tropical cyclone")) return "Severe";
         if (e.matches(".*\\b(warning|watch|emergency)\\b.*")) return "Severe";
-        return e.matches(".*\\badvisory\\b.*") ? "Moderate" : "Minor";
+        if (e.matches(".*\\badvisory\\b.*")) return "Moderate";
+        return e.matches(".*\\b(statement|information|outlook)\\b.*") ? "Minor" : "Moderate";
     }
 
     private static String isoUtc(long epochSeconds) {

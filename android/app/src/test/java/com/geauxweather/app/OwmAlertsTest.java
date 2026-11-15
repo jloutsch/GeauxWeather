@@ -59,6 +59,25 @@ public class OwmAlertsTest {
         assertTrue(HurricaneAlertHelper.shouldNotify(yellow, true));
     }
 
+    // Regression: ISSUE-004 — Brazil's INMET names alerts in Portuguese ("Tempestade"); unmatched names fell to Minor
+    // Found by /qa on 2026-11-15 (live OpenWeatherMap key, São Paulo)
+    // Report: .gstack/qa-reports/qa-report-owm-key-2026-11-15.md
+    @Test
+    public void unrecognisedNamesDefaultToModerate() throws Exception {
+        JSONObject inmet = HurricaneAlertHelper.fromOwm(new JSONObject().put("alerts", new JSONArray()
+                .put(alert("Instituto Nacional de Meteorologia", "Tempestade", NOW_S - 600, NOW_S + 3600))),
+                NOW_S * 1000).getJSONObject(0);
+        assertEquals("Moderate", inmet.getString("severity"));
+        assertFalse(HurricaneAlertHelper.shouldNotify(inmet, false));
+        assertTrue(HurricaneAlertHelper.shouldNotify(inmet, true));
+        assertEquals("Extreme", HurricaneAlertHelper.owmSeverity("Alerta roja por lluvias"));
+        assertEquals("Severe", HurricaneAlertHelper.owmSeverity("Aviso laranja de chuva"));
+        assertEquals("Severe", HurricaneAlertHelper.owmSeverity("Alerta naranja"));
+        assertEquals("Moderate", HurricaneAlertHelper.owmSeverity("Aviso amarelo"));
+        assertEquals("Minor", HurricaneAlertHelper.owmSeverity("Coastal flood statement"));
+        assertEquals("Minor", HurricaneAlertHelper.owmSeverity("Fire weather outlook"));
+    }
+
     // Regression: ISSUE-002 — OpenWeatherMap alerts have no area name; the notification read "Severe ·  · near Sydney"
     // Found by /qa on 2026-11-15
     // Report: .gstack/qa-reports/qa-report-owm-key-2026-11-15.md

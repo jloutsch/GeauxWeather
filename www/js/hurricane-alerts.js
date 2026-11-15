@@ -324,15 +324,18 @@
 
   /**
    * OpenWeatherMap passes on each national service's alerts without a severity, so it is read from the name:
-   * a colour first (UK, EU style), then storm keywords and "warning"/"watch", then "advisory"; else Minor.
+   * a colour first (UK/EU style, also Portuguese and Spanish), then storm keywords and "warning"/"watch",
+   * then "advisory", then English statements and outlooks as Minor. Anything else is an official alert in a
+   * form these rules don't know (e.g. Brazil's "Tempestade"): Moderate, so it shows with advisories on.
    */
   function owmSeverity(event) {
     const e = (event || '').toLowerCase();
-    if (/\b(red|extreme)\b/.test(e)) return 'Extreme';
-    if (/\byellow\b/.test(e)) return 'Moderate';
-    if (/\b(amber|orange)\b/.test(e) || isSevereEvent(e) || /tropical cyclone/.test(e)) return 'Severe';
+    if (/\b(red|extreme|vermelho|vermelha|rojo|roja)\b/.test(e)) return 'Extreme';
+    if (/\b(yellow|amarelo|amarela|amarillo|amarilla)\b/.test(e)) return 'Moderate';
+    if (/\b(amber|orange|laranja|naranja)\b/.test(e) || isSevereEvent(e) || /tropical cyclone/.test(e)) return 'Severe';
     if (/\b(warning|watch|emergency)\b/.test(e)) return 'Severe';
-    return /\badvisory\b/.test(e) ? 'Moderate' : 'Minor';
+    if (/\badvisory\b/.test(e)) return 'Moderate';
+    return /\b(statement|information|outlook)\b/.test(e) ? 'Minor' : 'Moderate';
   }
 
   /** OpenWeatherMap One Call 3.0 alerts → NWS-style properties (ended ones dropped). */
