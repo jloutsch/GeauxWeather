@@ -63,8 +63,7 @@ public class MainActivity extends BridgeActivity {
         // WebView may not be ready yet — retry shortly
         scheduleDeliverAlert(400);
         scheduleDeliverAlert(1200);
-        scheduleOpenScreen(600);
-        scheduleOpenScreen(1500);
+        scheduleOpenScreen(400);
         getOnBackPressedDispatcher().addCallback(this, backCallback);
     }
 
@@ -137,13 +136,23 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void scheduleOpenScreen(long delayMs) {
-        if (pendingScreen == null) return;
+        scheduleOpenScreen(delayMs, 20);
+    }
+
+    /** Retries every half second (up to 10 s) until app.js has loaded: a cold start can take several seconds. */
+    private void scheduleOpenScreen(long delayMs, int triesLeft) {
+        if (pendingScreen == null || triesLeft <= 0) return;
         new android.os.Handler(getMainLooper()).postDelayed(() -> {
-            if (pendingScreen == null || getBridge() == null || getBridge().getWebView() == null) return;
+            if (pendingScreen == null) return;
+            if (getBridge() == null || getBridge().getWebView() == null) {
+                scheduleOpenScreen(500, triesLeft - 1);
+                return;
+            }
             getBridge().getWebView().evaluateJavascript(
                     "(function(){if(typeof window.__geauxShowScreen==='function'){window.__geauxShowScreen('10day');return true;}return false;})()",
                     result -> {
                         if ("true".equals(result)) pendingScreen = null;
+                        else scheduleOpenScreen(500, triesLeft - 1);
                     });
         }, delayMs);
     }
