@@ -56,19 +56,49 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         return EXTRAS_NONE;
     }
 
-    /** WHO band, as on the Today UV tile. */
-    static String uvText(double uv) {
-        if (Double.isNaN(uv)) return "UV —";
+    /** Today-tile colors (www/css/app.css .aqi-*): good, moderate, usg, unhealthy, very, hazardous (tested). */
+    static final int[] LEVEL_COLORS = {0xFF3DCC8C, 0xFFF0C14A, 0xFFF0A040, 0xFFE85D4C, 0xFFC44DFF, 0xFFA02040};
+    /** EU AQI bands 0–5 share the Today tile's colors this way (euAqiLabel in www/js/weather.js). */
+    private static final int[] EU_LEVEL = {0, 0, 1, 2, 3, 5};
+
+    /** WHO UV band as a LEVEL_COLORS index (uvLabel in www/js/weather.js); -1 if unknown. */
+    static int uvLevel(double uv) {
+        if (Double.isNaN(uv)) return -1;
         long n = Math.round(uv);
-        return "UV " + n + " · " + UvNotifyHelper.category(n);
+        return n >= 11 ? 4 : n >= 8 ? 3 : n >= 6 ? 2 : n >= 3 ? 1 : 0;
     }
 
-    /** US AQI for °F, EU AQI for °C, as on the Today AQI tile. */
-    static String aqiText(double aqi, boolean us) {
-        String label = us ? "AQI" : "EU AQI";
-        if (Double.isNaN(aqi)) return label + " —";
-        return label + " " + Math.round(aqi) + " · "
-                + (us ? AqiNotifyHelper.US_TEXT : AqiNotifyHelper.EU_TEXT)[AqiNotifyHelper.band(aqi, us)];
+    /** US AQI for °F, EU AQI for °C, as a LEVEL_COLORS index; -1 if unknown. */
+    static int aqiLevel(double aqi, boolean us) {
+        if (Double.isNaN(aqi)) return -1;
+        int band = AqiNotifyHelper.band(aqi, us);
+        return us ? band : EU_LEVEL[band];
+    }
+
+    static String numberText(double v) {
+        return Double.isNaN(v) ? "—" : String.valueOf(Math.round(v));
+    }
+
+    /** "UV 3" with the number in its level's color, like the Today tiles. */
+    static CharSequence levelText(String label, double value, int level) {
+        android.text.SpannableStringBuilder b = new android.text.SpannableStringBuilder(label + " ");
+        int start = b.length();
+        b.append(numberText(value));
+        if (level >= 0) {
+            b.setSpan(new android.text.style.ForegroundColorSpan(LEVEL_COLORS[level]), start, b.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            b.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), start, b.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        return b;
+    }
+
+    static CharSequence uvText(Snapshot data) {
+        return levelText("UV", data.uv, uvLevel(data.uv));
+    }
+
+    static CharSequence aqiText(Snapshot data) {
+        return levelText("AQI", data.aqi, aqiLevel(data.aqi, data.usAqi));
     }
 
     @Override
@@ -113,8 +143,8 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         android.os.Bundle opts = appWidgetManager.getAppWidgetOptions(appWidgetId);
         int mode = extrasMode(opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
                 opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT));
-        String uv = uvText(data.uv);
-        String aqi = aqiText(data.aqi, data.usAqi);
+        CharSequence uv = uvText(data);
+        CharSequence aqi = aqiText(data);
         views.setTextViewText(R.id.widget_uv, uv);
         views.setTextViewText(R.id.widget_aqi, aqi);
         views.setTextViewText(R.id.widget_uv_side, uv);
