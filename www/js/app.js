@@ -90,12 +90,12 @@
     });
   });
 
-  /** Widget high/low text size; native adds 0, 3 or 6 sp (GeauxWeatherWidgetProvider.hiLowExtraSp). */
+  /** Widget high/low and location text sizes; native adds 0, 3 or 6 sp (GeauxWeatherWidgetProvider.extraSp). */
   const HI_LOW_SIZES = ['small', 'medium', 'large'];
 
   /** Home-screen widget look (native reads CapacitorStorage geauxweather_widget_style) */
   function defaultWidgetStyle() {
-    return { bgOpacity: 0, bgColor: '#141a22', textColor: '#ffffff', hiLowSize: 'small' };
+    return { bgOpacity: 0, bgColor: '#141a22', textColor: '#ffffff', hiLowSize: 'small', locationSize: 'small' };
   }
 
   function loadWidgetStyle() {
@@ -108,6 +108,7 @@
         bgColor: typeof o.bgColor === 'string' ? o.bgColor : '#141a22',
         textColor: typeof o.textColor === 'string' ? o.textColor : '#ffffff',
         hiLowSize: HI_LOW_SIZES.indexOf(o.hiLowSize) >= 0 ? o.hiLowSize : 'small',
+        locationSize: HI_LOW_SIZES.indexOf(o.locationSize) >= 0 ? o.locationSize : 'small',
       };
     } catch (e) {
       return defaultWidgetStyle();
@@ -131,6 +132,8 @@
     if (text) text.value = normalizeHexColor(style.textColor, '#ffffff');
     const hl = document.getElementById('widget-hilow-size');
     if (hl) hl.value = style.hiLowSize;
+    const ls = document.getElementById('widget-location-size');
+    if (ls) ls.value = style.locationSize;
   }
 
   function normalizeHexColor(hex, fallback) {
@@ -158,6 +161,7 @@
       bgColor: normalizeHexColor(style.bgColor, '#141a22'),
       textColor: normalizeHexColor(style.textColor, '#ffffff'),
       hiLowSize: HI_LOW_SIZES.indexOf(style.hiLowSize) >= 0 ? style.hiLowSize : 'small',
+      locationSize: HI_LOW_SIZES.indexOf(style.locationSize) >= 0 ? style.locationSize : 'small',
     });
     localStorage.setItem('geauxweather_widget_style', payload);
     try {
@@ -199,6 +203,7 @@
     const bg = document.getElementById('widget-bg-color');
     const text = document.getElementById('widget-text-color');
     const hiLow = document.getElementById('widget-hilow-size');
+    const locSize = document.getElementById('widget-location-size');
     let style = loadWidgetStyle();
     syncWidgetStyleControls(style);
 
@@ -208,6 +213,7 @@
         bgColor: bg ? bg.value : '#141a22',
         textColor: text ? text.value : '#ffffff',
         hiLowSize: hiLow ? hiLow.value : 'small',
+        locationSize: locSize ? locSize.value : 'small',
       };
     }
 
@@ -228,6 +234,7 @@
     if (bg) bg.addEventListener('input', scheduleSave);
     if (text) text.addEventListener('input', scheduleSave);
     if (hiLow) hiLow.addEventListener('change', scheduleSave);
+    if (locSize) locSize.addEventListener('change', scheduleSave);
 
     document.querySelectorAll('.widget-swatch[data-text]').forEach(function (btn) {
       btn.addEventListener('click', function () {

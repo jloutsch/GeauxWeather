@@ -193,6 +193,7 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         views.setTextColor(R.id.widget_location, dim);
         views.setTextColor(R.id.widget_hilow, dim);
         views.setTextViewTextSize(R.id.widget_hilow, android.util.TypedValue.COMPLEX_UNIT_SP, 12 + style.hiLowExtraSp);
+        views.setTextViewTextSize(R.id.widget_location, android.util.TypedValue.COMPLEX_UNIT_SP, 12 + style.locationExtraSp);
         for (int id : new int[] {R.id.widget_uv, R.id.widget_aqi, R.id.widget_uv_side, R.id.widget_aqi_side}) {
             views.setTextColor(id, muted);
         }
@@ -220,8 +221,8 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    /** Settings → High / low size: sp added to each widget's own high/low size (12sp here, 13sp on the clock). */
-    static float hiLowExtraSp(String size) {
+    /** Settings → High / low size and Location size: sp added to each widget's own size (12sp here, 13sp on the clock). */
+    static float extraSp(String size) {
         if ("medium".equals(size)) return 3;
         if ("large".equals(size)) return 6;
         return 0;
@@ -232,18 +233,20 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         final int bgColor;   // RGB
         final int textColor; // RGB
         final float hiLowExtraSp;
+        final float locationExtraSp;
 
-        Style(int bgOpacity, int bgColor, int textColor, float hiLowExtraSp) {
+        Style(int bgOpacity, int bgColor, int textColor, float hiLowExtraSp, float locationExtraSp) {
             this.bgOpacity = bgOpacity;
             this.bgColor = bgColor;
             this.textColor = textColor;
             this.hiLowExtraSp = hiLowExtraSp;
+            this.locationExtraSp = locationExtraSp;
         }
     }
 
     static Style readStyle(Context context) {
         // Default: fully transparent, white text (1.0.7 look)
-        Style fallback = new Style(0, Color.parseColor("#141A22"), Color.WHITE, 0);
+        Style fallback = new Style(0, Color.parseColor("#141A22"), Color.WHITE, 0, 0);
         try {
             SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
             String raw = prefs.getString(KEY_STYLE, null);
@@ -252,7 +255,8 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
             int opacity = o.optInt("bgOpacity", 0);
             int bg = parseHexColor(o.optString("bgColor", "#141A22"), Color.parseColor("#141A22"));
             int text = parseHexColor(o.optString("textColor", "#FFFFFF"), Color.WHITE);
-            return new Style(opacity, bg, text, hiLowExtraSp(o.optString("hiLowSize", "small")));
+            return new Style(opacity, bg, text, extraSp(o.optString("hiLowSize", "small")),
+                    extraSp(o.optString("locationSize", "small")));
         } catch (Exception e) {
             return fallback;
         }
