@@ -28,7 +28,7 @@
             android:format12Hour="h:mm"
             android:format24Hour="H:mm"
             android:textColor="#FFFFFF"
-            android:textSize="48sp"
+            android:textSize="44sp"
             android:textStyle="bold"
             android:includeFontPadding="false"
             android:maxLines="1"
