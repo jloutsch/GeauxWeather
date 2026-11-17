@@ -90,9 +90,12 @@
     });
   });
 
+  /** Widget high/low text size; native adds 0, 3 or 6 sp (GeauxWeatherWidgetProvider.hiLowExtraSp). */
+  const HI_LOW_SIZES = ['small', 'medium', 'large'];
+
   /** Home-screen widget look (native reads CapacitorStorage geauxweather_widget_style) */
   function defaultWidgetStyle() {
-    return { bgOpacity: 0, bgColor: '#141a22', textColor: '#ffffff' };
+    return { bgOpacity: 0, bgColor: '#141a22', textColor: '#ffffff', hiLowSize: 'small' };
   }
 
   function loadWidgetStyle() {
@@ -104,6 +107,7 @@
         bgOpacity: Math.max(0, Math.min(100, Number(o.bgOpacity) || 0)),
         bgColor: typeof o.bgColor === 'string' ? o.bgColor : '#141a22',
         textColor: typeof o.textColor === 'string' ? o.textColor : '#ffffff',
+        hiLowSize: HI_LOW_SIZES.indexOf(o.hiLowSize) >= 0 ? o.hiLowSize : 'small',
       };
     } catch (e) {
       return defaultWidgetStyle();
@@ -125,6 +129,8 @@
     if (opLab) opLab.textContent = opacityLabel(style.bgOpacity);
     if (bg) bg.value = normalizeHexColor(style.bgColor, '#141a22');
     if (text) text.value = normalizeHexColor(style.textColor, '#ffffff');
+    const hl = document.getElementById('widget-hilow-size');
+    if (hl) hl.value = style.hiLowSize;
   }
 
   function normalizeHexColor(hex, fallback) {
@@ -151,6 +157,7 @@
       bgOpacity: style.bgOpacity,
       bgColor: normalizeHexColor(style.bgColor, '#141a22'),
       textColor: normalizeHexColor(style.textColor, '#ffffff'),
+      hiLowSize: HI_LOW_SIZES.indexOf(style.hiLowSize) >= 0 ? style.hiLowSize : 'small',
     });
     localStorage.setItem('geauxweather_widget_style', payload);
     try {
@@ -191,6 +198,7 @@
     const opLab = document.getElementById('widget-opacity-label');
     const bg = document.getElementById('widget-bg-color');
     const text = document.getElementById('widget-text-color');
+    const hiLow = document.getElementById('widget-hilow-size');
     let style = loadWidgetStyle();
     syncWidgetStyleControls(style);
 
@@ -199,6 +207,7 @@
         bgOpacity: op ? parseInt(op.value, 10) || 0 : 0,
         bgColor: bg ? bg.value : '#141a22',
         textColor: text ? text.value : '#ffffff',
+        hiLowSize: hiLow ? hiLow.value : 'small',
       };
     }
 
@@ -218,6 +227,7 @@
     }
     if (bg) bg.addEventListener('input', scheduleSave);
     if (text) text.addEventListener('input', scheduleSave);
+    if (hiLow) hiLow.addEventListener('change', scheduleSave);
 
     document.querySelectorAll('.widget-swatch[data-text]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -803,6 +813,12 @@
     renderDaily(data);
   }
 
+  function aqiForUnits(aq) {
+    if (!aq) return null;
+    const v = units !== 'metric' ? aq.us_aqi : aq.european_aqi;
+    return v != null ? v : null;
+  }
+
   async function writeWidgetSnapshot(loc, data) {
     try {
       const c = data.current;
@@ -816,6 +832,9 @@
         isDay: c.is_day === 0 ? 0 : 1,
         high: d && d.temperature_2m_max ? Math.round(d.temperature_2m_max[0]) + '°' : '—°',
         low: d && d.temperature_2m_min ? Math.round(d.temperature_2m_min[0]) + '°' : '—°',
+        // Widget UV and air quality: the same values as the Today tiles (US AQI for °F, EU for °C)
+        uv: c.uv_index != null ? c.uv_index : null,
+        aqi: aqiForUnits(data.air_quality),
         units: units,
         updatedAt: Date.now(),
       });
