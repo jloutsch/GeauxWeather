@@ -122,19 +122,26 @@ public class GeauxClockWidgetProvider extends AppWidgetProvider {
         views.setTextColor(R.id.widget_temp, text);
         views.setTextColor(R.id.widget_hilow, dim);
         views.setTextViewTextSize(R.id.widget_hilow, android.util.TypedValue.COMPLEX_UNIT_SP, 13 + style.hiLowExtraSp);
+        views.setTextViewText(R.id.widget_uv, GeauxWeatherWidgetProvider.uvText(data.uv));
+        views.setTextViewText(R.id.widget_aqi, GeauxWeatherWidgetProvider.aqiText(data.aqi, data.usAqi));
+        views.setTextColor(R.id.widget_uv, muted);
+        views.setTextColor(R.id.widget_aqi, muted);
 
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
 
         Intent weather = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         if (weather != null) {
             weather.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            views.setOnClickPendingIntent(R.id.weather_area,
-                    PendingIntent.getActivity(context, appWidgetId * 2, weather, flags));
+            PendingIntent openWeather = PendingIntent.getActivity(context, appWidgetId * 2, weather, flags);
+            for (int id : new int[] {R.id.weather_area, R.id.widget_middle, R.id.widget_hilow}) {
+                views.setOnClickPendingIntent(id, openWeather);
+            }
         }
 
-        views.setOnClickPendingIntent(R.id.clock_area,
-                PendingIntent.getActivity(context, appWidgetId * 2 + 1,
-                        clockIntent(context, appWidgetId), flags));
+        PendingIntent openClock = PendingIntent.getActivity(context, appWidgetId * 2 + 1,
+                clockIntent(context, appWidgetId), flags);
+        views.setOnClickPendingIntent(R.id.clock_time, openClock);
+        views.setOnClickPendingIntent(R.id.clock_area, openClock);
 
         appWidgetManager.updateAppWidget(appWidgetId, views);
     }
