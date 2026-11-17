@@ -8,7 +8,10 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center_vertical"
-    android:padding="14dp"
+    android:paddingStart="14dp"
+    android:paddingTop="14dp"
+    android:paddingEnd="6dp"
+    android:paddingBottom="14dp"
     android:background="@drawable/widget_bg">
 
     <LinearLayout
@@ -34,51 +37,27 @@
             android:shadowDy="1.5"
             android:shadowRadius="4" />
 
-        <LinearLayout
+        <!-- UV and air quality as one two-line text, so both lines shrink to the same size -->
+        <TextView
             android:id="@+id/widget_middle"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="44dp"
             android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:orientation="vertical"
-            android:gravity="center">
-
-            <TextView
-                android:id="@+id/widget_uv"
-                android:layout_width="match_parent"
-                android:layout_height="18dp"
-                android:gravity="center"
-                android:maxLines="1"
-                android:text="UV —"
-                android:textColor="#F0F4FA"
-                android:textSize="13sp"
-                android:autoSizeTextType="uniform"
-                android:autoSizeMinTextSize="8sp"
-                android:autoSizeMaxTextSize="13sp"
-                android:shadowColor="#CC000000"
-                android:shadowDx="0"
-                android:shadowDy="1"
-                android:shadowRadius="3" />
-
-            <TextView
-                android:id="@+id/widget_aqi"
-                android:layout_width="match_parent"
-                android:layout_height="18dp"
-                android:layout_marginTop="2dp"
-                android:gravity="center"
-                android:maxLines="1"
-                android:text="AQI —"
-                android:textColor="#F0F4FA"
-                android:textSize="13sp"
-                android:autoSizeTextType="uniform"
-                android:autoSizeMinTextSize="8sp"
-                android:autoSizeMaxTextSize="13sp"
-                android:shadowColor="#CC000000"
-                android:shadowDx="0"
-                android:shadowDy="1"
-                android:shadowRadius="3" />
-        </LinearLayout>
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:gravity="center"
+            android:maxLines="2"
+            android:text="UV —&#10;AQI —"
+            android:textColor="#F0F4FA"
+            android:textSize="16sp"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="8sp"
+            android:autoSizeMaxTextSize="16sp"
+            android:lineSpacingExtra="2dp"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
 
         <LinearLayout
             android:id="@+id/weather_area"
@@ -99,7 +78,7 @@
                 android:id="@+id/widget_temp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="3dp"
                 android:text="—°"
                 android:textColor="#FFFFFF"
                 android:textSize="40sp"

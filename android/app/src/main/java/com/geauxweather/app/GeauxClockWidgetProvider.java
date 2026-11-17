@@ -122,10 +122,9 @@ public class GeauxClockWidgetProvider extends AppWidgetProvider {
         views.setTextColor(R.id.widget_temp, text);
         views.setTextColor(R.id.widget_hilow, dim);
         views.setTextViewTextSize(R.id.widget_hilow, android.util.TypedValue.COMPLEX_UNIT_SP, 13 + style.hiLowExtraSp);
-        views.setTextViewText(R.id.widget_uv, GeauxWeatherWidgetProvider.uvText(data.uv));
-        views.setTextViewText(R.id.widget_aqi, GeauxWeatherWidgetProvider.aqiText(data.aqi, data.usAqi));
-        views.setTextColor(R.id.widget_uv, muted);
-        views.setTextColor(R.id.widget_aqi, muted);
+        views.setTextViewText(R.id.widget_middle, GeauxWeatherWidgetProvider.uvText(data.uv) + "\n"
+                + GeauxWeatherWidgetProvider.aqiText(data.aqi, data.usAqi));
+        views.setTextColor(R.id.widget_middle, muted);
 
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
 
