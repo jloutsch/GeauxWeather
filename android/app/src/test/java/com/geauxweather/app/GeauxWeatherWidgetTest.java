@@ -27,12 +27,12 @@ public class GeauxWeatherWidgetTest {
     }
 
     @Test
-    public void highLowSizeAddsToEachWidgetsOwnSize() {
-        assertEquals(0, GeauxWeatherWidgetProvider.hiLowExtraSp("small"), 0);
-        assertEquals(3, GeauxWeatherWidgetProvider.hiLowExtraSp("medium"), 0);
-        assertEquals(6, GeauxWeatherWidgetProvider.hiLowExtraSp("large"), 0);
-        assertEquals(0, GeauxWeatherWidgetProvider.hiLowExtraSp(null), 0);
-        assertEquals(0, GeauxWeatherWidgetProvider.hiLowExtraSp("huge"), 0);
+    public void textSizeSettingAddsToEachWidgetsOwnSize() {
+        assertEquals(0, GeauxWeatherWidgetProvider.extraSp("small"), 0);
+        assertEquals(3, GeauxWeatherWidgetProvider.extraSp("medium"), 0);
+        assertEquals(6, GeauxWeatherWidgetProvider.extraSp("large"), 0);
+        assertEquals(0, GeauxWeatherWidgetProvider.extraSp(null), 0);
+        assertEquals(0, GeauxWeatherWidgetProvider.extraSp("huge"), 0);
     }
 
     @Test

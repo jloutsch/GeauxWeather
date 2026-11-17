@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Two rows so the gap between clock and temperature can hold UV and air quality:
-     top: clock | UV + AQI | icon + temp; bottom: date + location | high/low.
+     top: clock | UV + AQI | icon + temp; then date | high/low; then location.
      Taps: clock, date and location open the chosen clock app; the rest opens GeauxWeather. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
@@ -98,42 +98,20 @@
         android:orientation="horizontal"
         android:baselineAligned="false">
 
-        <LinearLayout
-            android:id="@+id/clock_area"
+        <TextClock
+            android:id="@+id/clock_date"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextClock
-                android:id="@+id/clock_date"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:format12Hour="EEE, MMM d"
-                android:format24Hour="EEE, MMM d"
-                android:textColor="#F0F4FA"
-                android:textSize="14sp"
-                android:maxLines="1"
-                android:shadowColor="#CC000000"
-                android:shadowDx="0"
-                android:shadowDy="1"
-                android:shadowRadius="3" />
-
-            <TextView
-                android:id="@+id/widget_location"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="GeauxWeather"
-                android:textColor="#E8EEF6"
-                android:textSize="13sp"
-                android:shadowColor="#CC000000"
-                android:shadowDx="0"
-                android:shadowDy="1"
-                android:shadowRadius="3" />
-        </LinearLayout>
+            android:format12Hour="EEE, MMM d"
+            android:format24Hour="EEE, MMM d"
+            android:textColor="#F0F4FA"
+            android:textSize="14sp"
+            android:maxLines="1"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
 
         <TextView
             android:id="@+id/widget_hilow"
@@ -148,4 +126,20 @@
             android:shadowDy="1"
             android:shadowRadius="3" />
     </LinearLayout>
+
+    <!-- Own full-width row so a larger Location size has room before it is cut off -->
+    <TextView
+        android:id="@+id/widget_location"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="GeauxWeather"
+        android:textColor="#E8EEF6"
+        android:textSize="13sp"
+        android:shadowColor="#CC000000"
+        android:shadowDx="0"
+        android:shadowDy="1"
+        android:shadowRadius="3" />
 </LinearLayout>

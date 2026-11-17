@@ -122,6 +122,7 @@ public class GeauxClockWidgetProvider extends AppWidgetProvider {
         views.setTextColor(R.id.widget_temp, text);
         views.setTextColor(R.id.widget_hilow, dim);
         views.setTextViewTextSize(R.id.widget_hilow, android.util.TypedValue.COMPLEX_UNIT_SP, 13 + style.hiLowExtraSp);
+        views.setTextViewTextSize(R.id.widget_location, android.util.TypedValue.COMPLEX_UNIT_SP, 13 + style.locationExtraSp);
         views.setTextViewText(R.id.widget_middle, new android.text.SpannableStringBuilder()
                 .append(GeauxWeatherWidgetProvider.uvText(data)).append("\n")
                 .append(GeauxWeatherWidgetProvider.aqiText(data)));
@@ -141,7 +142,8 @@ public class GeauxClockWidgetProvider extends AppWidgetProvider {
         PendingIntent openClock = PendingIntent.getActivity(context, appWidgetId * 2 + 1,
                 clockIntent(context, appWidgetId), flags);
         views.setOnClickPendingIntent(R.id.clock_time, openClock);
-        views.setOnClickPendingIntent(R.id.clock_area, openClock);
+        views.setOnClickPendingIntent(R.id.clock_date, openClock);
+        views.setOnClickPendingIntent(R.id.widget_location, openClock);
 
         appWidgetManager.updateAppWidget(appWidgetId, views);
     }
