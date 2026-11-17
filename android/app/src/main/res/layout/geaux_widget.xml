@@ -7,50 +7,154 @@
     android:padding="12dp"
     android:background="@drawable/widget_bg">
 
-    <TextView
-        android:id="@+id/widget_location"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="GeauxWeather"
-        android:textColor="#F0F4FA"
-        android:textSize="12sp"
-        android:shadowColor="#CC000000"
-        android:shadowDx="0"
-        android:shadowDy="1"
-        android:shadowRadius="3" />
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="2dp">
+        android:gravity="center_vertical">
 
-        <TextView
-            android:id="@+id/widget_temp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="—°"
-            android:textColor="#FFFFFF"
-            android:textSize="36sp"
-            android:textStyle="bold"
-            android:includeFontPadding="false"
-            android:shadowColor="#CC000000"
-            android:shadowDx="0"
-            android:shadowDy="1.5"
-            android:shadowRadius="4" />
-
-        <TextView
-            android:id="@+id/widget_condition"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_location"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="GeauxWeather"
+                android:textColor="#F0F4FA"
+                android:textSize="12sp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="3" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="2dp">
+
+                <TextView
+                    android:id="@+id/widget_temp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="—°"
+                    android:textColor="#FFFFFF"
+                    android:textSize="36sp"
+                    android:textStyle="bold"
+                    android:includeFontPadding="false"
+                    android:shadowColor="#CC000000"
+                    android:shadowDx="0"
+                    android:shadowDy="1.5"
+                    android:shadowRadius="4" />
+
+                <TextView
+                    android:id="@+id/widget_condition"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="10dp"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:text="Open app to load"
+                    android:textColor="#F0F4FA"
+                    android:textSize="14sp"
+                    android:shadowColor="#CC000000"
+                    android:shadowDx="0"
+                    android:shadowDy="1"
+                    android:shadowRadius="3" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_hilow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="H —°  L —°"
+                android:textColor="#E8EEF6"
+                android:textSize="12sp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="3" />
+        </LinearLayout>
+
+        <!-- Wide but short (e.g. 4×1): UV and air quality to the right -->
+        <LinearLayout
+            android:id="@+id/widget_side"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
+            android:orientation="vertical"
+            android:gravity="end"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_uv_side"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="UV —"
+                android:textColor="#F0F4FA"
+                android:textSize="13sp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="3" />
+
+            <TextView
+                android:id="@+id/widget_aqi_side"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:maxLines="1"
+                android:text="AQI —"
+                android:textColor="#F0F4FA"
+                android:textSize="13sp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="3" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Two or more rows tall: UV and air quality underneath -->
+    <LinearLayout
+        android:id="@+id/widget_below"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_uv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:ellipsize="end"
-            android:maxLines="2"
-            android:text="Open app to load"
+            android:maxLines="1"
+            android:text="UV —"
+            android:textColor="#F0F4FA"
+            android:textSize="14sp"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
+
+        <TextView
+            android:id="@+id/widget_aqi"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="AQI —"
             android:textColor="#F0F4FA"
             android:textSize="14sp"
             android:shadowColor="#CC000000"
@@ -58,17 +162,4 @@
             android:shadowDy="1"
             android:shadowRadius="3" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/widget_hilow"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="H —°  L —°"
-        android:textColor="#E8EEF6"
-        android:textSize="12sp"
-        android:shadowColor="#CC000000"
-        android:shadowDx="0"
-        android:shadowDy="1"
-        android:shadowRadius="3" />
 </LinearLayout>

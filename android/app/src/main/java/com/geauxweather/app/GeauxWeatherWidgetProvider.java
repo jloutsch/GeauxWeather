@@ -44,6 +44,39 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
     private static final String KEY_WIDGET = "geauxweather_widget";
     private static final String KEY_STYLE = "geauxweather_widget_style";
 
+    /** Where UV and air quality go, by widget size. */
+    static final int EXTRAS_NONE = 0;
+    static final int EXTRAS_SIDE = 1;
+    static final int EXTRAS_BELOW = 2;
+
+    /** Two rows tall: underneath. One row but wide (about 4 cells): to the right. Otherwise hidden. */
+    static int extrasMode(int widthDp, int heightDp) {
+        if (heightDp >= 100) return EXTRAS_BELOW;
+        if (widthDp >= 220) return EXTRAS_SIDE;
+        return EXTRAS_NONE;
+    }
+
+    /** WHO band, as on the Today UV tile. */
+    static String uvText(double uv) {
+        if (Double.isNaN(uv)) return "UV —";
+        long n = Math.round(uv);
+        return "UV " + n + " · " + UvNotifyHelper.category(n);
+    }
+
+    /** US AQI for °F, EU AQI for °C, as on the Today AQI tile. */
+    static String aqiText(double aqi, boolean us) {
+        String label = us ? "AQI" : "EU AQI";
+        if (Double.isNaN(aqi)) return label + " —";
+        return label + " " + Math.round(aqi) + " · "
+                + (us ? AqiNotifyHelper.US_TEXT : AqiNotifyHelper.EU_TEXT)[AqiNotifyHelper.band(aqi, us)];
+    }
+
+    @Override
+    public void onAppWidgetOptionsChanged(Context context, AppWidgetManager appWidgetManager, int appWidgetId,
+                                          android.os.Bundle newOptions) {
+        updateAppWidget(context, appWidgetManager, appWidgetId); // resized: show or hide UV and air quality
+    }
+
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
         for (int id : appWidgetIds) {
@@ -75,6 +108,19 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(R.id.widget_temp, data.temp);
         views.setTextViewText(R.id.widget_condition, data.condition);
         views.setTextViewText(R.id.widget_hilow, data.hilow);
+
+        // Portrait size: phones report the narrow width and tall height for portrait
+        android.os.Bundle opts = appWidgetManager.getAppWidgetOptions(appWidgetId);
+        int mode = extrasMode(opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
+                opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT));
+        String uv = uvText(data.uv);
+        String aqi = aqiText(data.aqi, data.usAqi);
+        views.setTextViewText(R.id.widget_uv, uv);
+        views.setTextViewText(R.id.widget_aqi, aqi);
+        views.setTextViewText(R.id.widget_uv_side, uv);
+        views.setTextViewText(R.id.widget_aqi_side, aqi);
+        views.setViewVisibility(R.id.widget_side, mode == EXTRAS_SIDE ? android.view.View.VISIBLE : android.view.View.GONE);
+        views.setViewVisibility(R.id.widget_below, mode == EXTRAS_BELOW ? android.view.View.VISIBLE : android.view.View.GONE);
 
         applyStyle(views, style);
 
@@ -116,6 +162,10 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         views.setTextColor(R.id.widget_condition, muted);
         views.setTextColor(R.id.widget_location, dim);
         views.setTextColor(R.id.widget_hilow, dim);
+        views.setTextViewTextSize(R.id.widget_hilow, android.util.TypedValue.COMPLEX_UNIT_SP, 12 + style.hiLowExtraSp);
+        for (int id : new int[] {R.id.widget_uv, R.id.widget_aqi, R.id.widget_uv_side, R.id.widget_aqi_side}) {
+            views.setTextColor(id, muted);
+        }
     }
 
     static int withAlpha(int color, int opacity0to100) {
@@ -140,21 +190,30 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         }
     }
 
+    /** Settings → High / low size: sp added to each widget's own high/low size (12sp here, 13sp on the clock). */
+    static float hiLowExtraSp(String size) {
+        if ("medium".equals(size)) return 3;
+        if ("large".equals(size)) return 6;
+        return 0;
+    }
+
     static class Style {
         final int bgOpacity; // 0–100
         final int bgColor;   // RGB
         final int textColor; // RGB
+        final float hiLowExtraSp;
 
-        Style(int bgOpacity, int bgColor, int textColor) {
+        Style(int bgOpacity, int bgColor, int textColor, float hiLowExtraSp) {
             this.bgOpacity = bgOpacity;
             this.bgColor = bgColor;
             this.textColor = textColor;
+            this.hiLowExtraSp = hiLowExtraSp;
         }
     }
 
     static Style readStyle(Context context) {
         // Default: fully transparent, white text (1.0.7 look)
-        Style fallback = new Style(0, Color.parseColor("#141A22"), Color.WHITE);
+        Style fallback = new Style(0, Color.parseColor("#141A22"), Color.WHITE, 0);
         try {
             SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
             String raw = prefs.getString(KEY_STYLE, null);
@@ -163,7 +222,7 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
             int opacity = o.optInt("bgOpacity", 0);
             int bg = parseHexColor(o.optString("bgColor", "#141A22"), Color.parseColor("#141A22"));
             int text = parseHexColor(o.optString("textColor", "#FFFFFF"), Color.WHITE);
-            return new Style(opacity, bg, text);
+            return new Style(opacity, bg, text, hiLowExtraSp(o.optString("hiLowSize", "small")));
         } catch (Exception e) {
             return fallback;
         }
@@ -176,19 +235,27 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
         final String hilow;
         final int weatherCode; // WMO code, -1 if unknown
         final int isDay;       // 1 day, 0 night, -1 unknown (snapshot written before is_day existed)
+        final double uv;       // NaN if unknown
+        final double aqi;      // NaN if unknown; US or EU scale per usAqi
+        final boolean usAqi;   // US AQI for °F, EU AQI for °C
 
-        Snapshot(String location, String temp, String condition, String hilow, int weatherCode, int isDay) {
+        Snapshot(String location, String temp, String condition, String hilow, int weatherCode, int isDay,
+                 double uv, double aqi, boolean usAqi) {
             this.location = location;
             this.temp = temp;
             this.condition = condition;
             this.hilow = hilow;
             this.weatherCode = weatherCode;
             this.isDay = isDay;
+            this.uv = uv;
+            this.aqi = aqi;
+            this.usAqi = usAqi;
         }
     }
 
     static Snapshot readSnapshot(Context context) {
-        Snapshot fallback = new Snapshot("GeauxWeather", "—°", "Open app to load", "H —°  L —°", -1, -1);
+        Snapshot fallback = new Snapshot("GeauxWeather", "—°", "Open app to load", "H —°  L —°", -1, -1,
+                Double.NaN, Double.NaN, true);
         try {
             SharedPreferences prefs = context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
             String raw = prefs.getString(KEY_WIDGET, null);
@@ -207,7 +274,9 @@ public class GeauxWeatherWidgetProvider extends AppWidgetProvider {
                 isDay = sunUp ? 1 : 0;
                 if (code >= 0) cond = WidgetRefreshWorker.condition(code, sunUp);
             }
-            return new Snapshot(loc, temp, cond, "H " + high + "  L " + low, code, isDay);
+            return new Snapshot(loc, temp, cond, "H " + high + "  L " + low, code, isDay,
+                    o.optDouble("uv", Double.NaN), o.optDouble("aqi", Double.NaN),
+                    !"metric".equals(o.optString("units")));
         } catch (Exception e) {
             return fallback;
         }

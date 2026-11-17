@@ -121,6 +121,7 @@ public class GeauxClockWidgetProvider extends AppWidgetProvider {
         views.setTextColor(R.id.widget_location, dim);
         views.setTextColor(R.id.widget_temp, text);
         views.setTextColor(R.id.widget_hilow, dim);
+        views.setTextViewTextSize(R.id.widget_hilow, android.util.TypedValue.COMPLEX_UNIT_SP, 13 + style.hiLowExtraSp);
 
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
 

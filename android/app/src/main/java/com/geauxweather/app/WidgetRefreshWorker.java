@@ -177,7 +177,7 @@ public class WidgetRefreshWorker extends Worker {
         try {
             String url = String.format(Locale.US,
                     "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
-                            + "&current=temperature_2m,weather_code,is_day,precipitation"
+                            + "&current=temperature_2m,weather_code,is_day,precipitation,uv_index"
                             + "&daily=temperature_2m_max,temperature_2m_min"
                             + "&minutely_15=precipitation,snowfall&forecast_minutely_15=6"
                             + "&forecast_days=1&timezone=auto&timeformat=unixtime%s%s",
@@ -207,6 +207,11 @@ public class WidgetRefreshWorker extends Worker {
             snap.put("isDay", isDay);
             snap.put("high", dailyTemp(d, "temperature_2m_max"));
             snap.put("low", dailyTemp(d, "temperature_2m_min"));
+            if (c.has("uv_index") && !c.isNull("uv_index")) snap.put("uv", c.getDouble("uv_index"));
+            double aqi = currentAqi(loc, !"metric".equals(units));
+            // A failed air-quality download keeps the last reading rather than blanking the widget
+            if (Double.isNaN(aqi) && prev != null) aqi = prev.optDouble("aqi", Double.NaN);
+            if (!Double.isNaN(aqi)) snap.put("aqi", aqi);
             snap.put("units", units);
             snap.put("updatedAt", System.currentTimeMillis());
             prefs.edit().putString(KEY_WIDGET, snap.toString()).apply();
@@ -264,6 +269,22 @@ public class WidgetRefreshWorker extends Worker {
             out.put(name, v);
         }
         json.put(key, out);
+    }
+
+    /** Current US or EU AQI, as on the Today tile; NaN when the download fails. */
+    private static double currentAqi(double[] loc, boolean us) {
+        String field = us ? "us_aqi" : "european_aqi";
+        try {
+            String body = HurricaneAlertHelper.httpGet(String.format(Locale.US,
+                    "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=%.4f&longitude=%.4f"
+                            + "&current=%s&timezone=auto", loc[0], loc[1], field), "application/json");
+            if (body == null) return Double.NaN;
+            JSONObject c = new JSONObject(body).optJSONObject("current");
+            return c == null ? Double.NaN : c.optDouble(field, Double.NaN);
+        } catch (Exception e) {
+            Log.w(TAG, "widget refresh: air quality failed: " + e);
+            return Double.NaN;
+        }
     }
 
     private static String dailyTemp(JSONObject daily, String key) {
