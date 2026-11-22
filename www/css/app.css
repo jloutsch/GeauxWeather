@@ -1860,6 +1860,14 @@ button.setting-btn:active {
   width: 100%;
   height: 100%;
 }
+/* Recolored base maps (Settings → Map style; the filters are next to #map in index.html): at fractional
+   screen scales the recolored tile edges showed as light lines. Overlap the tiles by 1px instead of
+   Leaflet's additive edge blending (plus-lighter), which would turn the overlap white. */
+.leaflet-container .map-base-tiles img.leaflet-tile {
+  width: 257px !important;
+  height: 257px !important;
+  mix-blend-mode: normal;
+}
 .leaflet-control-attribution {
   font-size: 10px;
   background: rgba(11, 15, 20, 0.75) !important;

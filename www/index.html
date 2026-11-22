@@ -125,7 +125,22 @@
           <button class="layer-btn" data-layer="eclipse">Eclipse</button>
           <button type="button" id="map-recenter" class="layer-btn map-tool-btn" title="Recenter">⊙</button>
         </div>
-        <div id="map" class="map-container"></div>
+        <div id="map" class="map-container" data-map-style="dark"></div>
+        <!-- Settings → Map style: recolors the OpenStreetMap tiles (text light, land dark, water darkest).
+             The rules sit here, not in app.css, because url(#…) in a separate stylesheet would not find them. -->
+        <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+          <filter id="map-style-dark" color-interpolation-filters="sRGB">
+            <feColorMatrix type="matrix" values="0.93 -1.24 -0.43 0 0.85  0.93 -1.24 -0.43 0 0.85  0.93 -1.24 -0.43 0 0.85  0 0 0 1 0" />
+          </filter>
+          <filter id="map-style-navy" color-interpolation-filters="sRGB">
+            <feColorMatrix type="matrix" values="0.651 -0.868 -0.301 0 0.595  0.818 -1.091 -0.378 0 0.768  1.023 -1.364 -0.473 0 1.005  0 0 0 1 0" />
+          </filter>
+        </svg>
+        <style>
+          #map[data-map-style='dark'] .map-base-tiles { filter: url(#map-style-dark); }
+          #map[data-map-style='navy'] .map-base-tiles { filter: url(#map-style-navy); }
+          #map[data-map-style='gray'] .map-base-tiles { filter: grayscale(1) contrast(0.9); }
+        </style>
         <div class="map-pin-bar">
           <span id="map-pin-hint" class="map-pin-hint">Tap map to drop a pin</span>
           <button type="button" id="btn-save-place" class="save-place-btn" disabled>Save</button>
@@ -218,6 +233,15 @@
               <option value="ukmo_seamless">UKMO (UK) · 7 days</option>
               <option value="meteofrance_seamless">Météo-France · 4 days</option>
               <option value="jma_seamless">JMA (Japan)</option>
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>Map style</span>
+            <select id="map-style">
+              <option value="dark">Dark gray (default)</option>
+              <option value="navy">Dark blue</option>
+              <option value="gray">Light gray</option>
+              <option value="standard">Standard colors</option>
             </select>
           </label>
           <label class="setting-row">

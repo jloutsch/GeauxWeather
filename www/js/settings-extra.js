@@ -113,6 +113,17 @@
       reload();
     });
   }
+  const mapStyleSelect = document.getElementById('map-style');
+  const mapEl = document.getElementById('map');
+  if (mapStyleSelect && mapEl) {
+    mapStyleSelect.value = localStorage.getItem('map_style') || mapEl.dataset.mapStyle;
+    if (mapStyleSelect.selectedIndex < 0) mapStyleSelect.value = mapEl.dataset.mapStyle; // unknown saved value
+    mapEl.dataset.mapStyle = mapStyleSelect.value;
+    mapStyleSelect.addEventListener('change', function () {
+      localStorage.setItem('map_style', mapStyleSelect.value);
+      mapEl.dataset.mapStyle = mapStyleSelect.value;
+    });
+  }
   unitSelects.forEach(function (sel) {
     sel.addEventListener('change', async function () {
       U.set(sel.dataset.unit, sel.value);
