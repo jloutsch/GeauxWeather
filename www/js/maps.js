@@ -115,6 +115,7 @@
     baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       attribution: '&copy; OpenStreetMap',
+      className: 'map-base-tiles', // recolored by Settings → Map style (filters in index.html)
     }).addTo(map);
 
     wireMapEvents();
@@ -521,11 +522,12 @@
   }
 
   function radarUrl(frame) {
-    // RainViewer: color=2, options={smooth}_{snow} → 1_1 = smoothed + snow colors
+    // RainViewer: color=2 (the only palette it serves now), options={smooth}_{snow} →
+    // 0_1 = unsmoothed + snow colors; smoothing blurred light rain into the map
     return (
       'https://tilecache.rainviewer.com' +
       frame.path +
-      '/256/{z}/{x}/{y}/2/1_1.png'
+      '/256/{z}/{x}/{y}/2/0_1.png'
     );
   }
 
@@ -570,7 +572,7 @@
     frameIndex = next;
     const frame = radarFrames[frameIndex];
     const url = radarUrl(frame);
-    const targetOpacity = 0.65;
+    const targetOpacity = 0.85;
     const newLayer = makeRadarLayer(url, animate ? 0 : targetOpacity);
 
     if (!animate || !radarFront) {
